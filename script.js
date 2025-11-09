@@ -12,14 +12,6 @@ const titleInput = document.getElementById('titleInput');
 const codeInput = document.getElementById('codeInput');
 const addBtn = document.getElementById('addBtn');
 const codeList = document.getElementById('codeList');
-const setupBtn = document.getElementById('setupBtn');
-const syncBtn = document.getElementById('syncBtn');
-const setupModal = document.getElementById('setupModal');
-const closeModal = document.getElementById('closeModal');
-const tokenInput = document.getElementById('tokenInput');
-const saveTokenBtn = document.getElementById('saveTokenBtn');
-const statusIndicator = document.getElementById('statusIndicator');
-const statusText = document.getElementById('statusText');
 
 // Initialize app
 initializeApp();
@@ -44,25 +36,6 @@ codeInput.addEventListener('keydown', (e) => {
         addCode();
     }
 });
-
-// GitHub Sync Event Listeners
-setupBtn.addEventListener('click', () => {
-    setupModal.style.display = 'block';
-});
-
-closeModal.addEventListener('click', () => {
-    setupModal.style.display = 'none';
-});
-
-window.addEventListener('click', (e) => {
-    if (e.target === setupModal) {
-        setupModal.style.display = 'none';
-    }
-});
-
-saveTokenBtn.addEventListener('click', saveGitHubToken);
-
-syncBtn.addEventListener('click', syncWithGitHub);
 
 // Add code function
 function addCode() {
@@ -226,7 +199,7 @@ async function initializeApp() {
 // Load token from Netlify function
 async function loadTokenFromNetlify() {
     try {
-        statusText.textContent = 'Connecting to GitHub...';
+        console.log('Connecting to GitHub...');
         
         const response = await fetch('/.netlify/functions/get-token');
         
@@ -241,11 +214,6 @@ async function loadTokenFromNetlify() {
             // Also load gistId from localStorage if exists
             gistId = localStorage.getItem('gistId') || '';
             
-            // Hide setup button on Netlify deployment
-            if (setupBtn) {
-                setupBtn.style.display = 'none';
-            }
-            
             console.log('✅ Token loaded from Netlify');
             
             // Load or create gist
@@ -255,9 +223,7 @@ async function loadTokenFromNetlify() {
         }
     } catch (error) {
         console.error('Error loading token from Netlify:', error);
-        statusIndicator.className = 'status-indicator disconnected';
-        statusText.textContent = '⚠️ GitHub token not configured in Netlify';
-        alert('⚠️ Administrator: Please configure GITHUB_TOKEN in Netlify environment variables');
+        console.error('⚠️ GitHub token not configured in Netlify');
     }
 }
 
@@ -267,114 +233,6 @@ function loadGitHubConfig() {
         gistId = localStorage.getItem('gistId') || '';
     } catch (error) {
         console.error('Error loading GitHub config:', error);
-    }
-}
-
-async function saveGitHubToken() {
-    const token = tokenInput.value.trim();
-    
-    if (!token) {
-        alert('Please enter a GitHub token!');
-        return;
-    }
-    
-    // Verify token by making a test API call
-    statusText.textContent = 'Verifying token...';
-    
-    try {
-        const response = await fetch('https://api.github.com/user', {
-            headers: {
-                'Authorization': `token ${token}`,
-                'Accept': 'application/vnd.github.v3+json'
-            }
-        });
-        
-        if (!response.ok) {
-            alert('❌ Invalid token! Please check and try again.');
-            statusText.textContent = 'Token verification failed';
-            return;
-        }
-        
-        githubToken = token;
-        localStorage.setItem('githubToken', githubToken);
-        tokenInput.value = '';
-        setupModal.style.display = 'none';
-        
-        updateSyncUI();
-        
-        // Try to load existing data or create new gist
-        await loadOrCreateGist();
-        
-    } catch (error) {
-        console.error('Token verification error:', error);
-        alert('❌ Failed to verify token. Please check your internet connection.');
-        statusText.textContent = 'Connection failed';
-    }
-}
-
-function updateSyncUI() {
-    if (githubToken) {
-        // Hide setup button if on Netlify or token exists
-        if (isNetlifyDeployment) {
-            setupBtn.style.display = 'none';
-        } else {
-            setupBtn.style.display = 'none';
-        }
-        
-        syncBtn.style.display = 'inline-block';
-        statusIndicator.className = 'status-indicator connected';
-        statusText.textContent = gistId ? `Connected to GitHub (${codeSnippets.length} snippets)` : 'Connected - Setting up...';
-    } else {
-        if (isNetlifyDeployment) {
-            setupBtn.style.display = 'none';
-            statusIndicator.className = 'status-indicator disconnected';
-            statusText.textContent = '⚠️ Admin: Configure token in Netlify';
-        } else {
-            setupBtn.style.display = 'inline-block';
-            syncBtn.style.display = 'none';
-            statusIndicator.className = 'status-indicator disconnected';
-            statusText.textContent = '⚠️ Setup GitHub to save your data';
-        }
-    }
-}
-
-async function syncWithGitHub() {
-    if (!githubToken) {
-        alert('⚠️ Please setup GitHub token first to save your data!');
-        setupModal.style.display = 'block';
-        return;
-    }
-    
-    if (isSyncing) {
-        return; // Silent skip if already syncing
-    }
-    
-    isSyncing = true;
-    statusIndicator.className = 'status-indicator syncing';
-    statusText.textContent = 'Syncing...';
-    syncBtn.disabled = true;
-    
-    try {
-        if (gistId) {
-            // Update existing gist
-            await updateGist();
-        } else {
-            // Create new gist
-            await createGist();
-        }
-        
-        statusIndicator.className = 'status-indicator connected';
-        const time = new Date().toLocaleTimeString();
-        statusText.textContent = `Connected (${codeSnippets.length} snippets) - Last synced: ${time}`;
-        console.log('✅ Synced successfully');
-    } catch (error) {
-        console.error('Sync error:', error);
-        statusIndicator.className = 'status-indicator disconnected';
-        statusText.textContent = 'Sync failed - Check connection';
-        alert('❌ Sync failed: ' + error.message + '\n\nPlease check your internet connection and token.');
-    } finally {
-        isSyncing = false;
-        syncBtn.disabled = false;
     }
 }
 
@@ -389,7 +247,6 @@ async function autoSyncToGitHub() {
     try {
         await updateGist();
         console.log('✅ Auto-synced to GitHub');
-        updateSyncUI();
     } catch (error) {
         console.error('Auto-sync error:', error);
     } finally {
@@ -456,7 +313,7 @@ async function loadFromGist() {
     if (!githubToken || !gistId) return false;
     
     try {
-        statusText.textContent = 'Loading from GitHub...';
+        console.log('Loading from GitHub...');
         
         const response = await fetch(`https://api.github.com/gists/${gistId}`, {
             headers: {
@@ -475,7 +332,6 @@ async function loadFromGist() {
         
         codeSnippets = cloudSnippets;
         renderCodeList();
-        updateSyncUI();
         
         console.log('✅ Loaded from GitHub:', cloudSnippets.length, 'snippets');
         return true;
@@ -486,7 +342,7 @@ async function loadFromGist() {
 }
 
 async function loadOrCreateGist() {
-    statusText.textContent = 'Checking for existing data...';
+    console.log('Checking for existing data...');
     
     // Try to find existing gist
     try {
@@ -508,7 +364,7 @@ async function loadOrCreateGist() {
                 gistId = existingGist.id;
                 localStorage.setItem('gistId', gistId);
                 await loadFromGist();
-                statusText.textContent = `✅ Connected (${codeSnippets.length} snippets loaded)`;
+                console.log(`✅ Connected (${codeSnippets.length} snippets loaded)`);
                 return;
             }
         }
@@ -519,10 +375,10 @@ async function loadOrCreateGist() {
     // Create new gist if none exists
     try {
         await createGist();
-        statusText.textContent = '✅ Connected - Ready to save!';
+        console.log('✅ Connected - Ready to save!');
     } catch (error) {
         console.error('Error creating gist:', error);
-        statusText.textContent = '❌ Failed to setup - Try again';
+        console.error('❌ Failed to setup - Try again');
     }
 }
 

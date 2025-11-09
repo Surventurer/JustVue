@@ -10,39 +10,6 @@
     <div class="container">
         <h1>Code Manager</h1>
         
-        <!-- GitHub Sync Section -->
-        <div class="sync-section" id="syncSection">
-            <div class="sync-status" id="syncStatus">
-                <span class="status-indicator" id="statusIndicator">●</span>
-                <span id="statusText">Initializing...</span>
-            </div>
-            <button class="btn btn-sync" id="setupBtn" style="display:none;">⚙️ Setup GitHub Sync</button>
-            <button class="btn btn-sync" id="syncBtn" style="display:none;">☁️ Sync Now</button>
-        </div>
-
-        <!-- GitHub Setup Modal -->
-        <div class="modal" id="setupModal">
-            <div class="modal-content">
-                <span class="close" id="closeModal">&times;</span>
-                <h2>Setup GitHub Sync</h2>
-                <p>To enable cloud sync, you need a GitHub Personal Access Token:</p>
-                <ol>
-                    <li>Go to <a href="https://github.com/settings/tokens/new" target="_blank">GitHub Token Settings</a></li>
-                    <li>Click "Generate new token (classic)"</li>
-                    <li>Give it a name like "Code Manager"</li>
-                    <li>Select scope: <strong>gist</strong> (Create gists)</li>
-                    <li>Click "Generate token" and copy it</li>
-                </ol>
-                <div class="input-group">
-                    <input type="password" id="tokenInput" placeholder="Paste your GitHub token here...">
-                    <button class="btn btn-primary" id="saveTokenBtn">Save Token</button>
-                </div>
-                <div class="token-info">
-                    <small>⚠️ Your token is stored locally and never shared.</small>
-                </div>
-            </div>
-        </div>
-        
         <div class="search-section">
             <input type="text" id="searchInput" placeholder="🔍 Search by title...">
         </div>
