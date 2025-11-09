@@ -4,6 +4,7 @@ let githubToken = '';
 let gistId = '';
 let isSyncing = false;
 let autoSyncEnabled = true;
+let isNetlifyDeployment = false;
 
 // DOM elements
 const searchInput = document.getElementById('searchInput');
@@ -20,9 +21,8 @@ const saveTokenBtn = document.getElementById('saveTokenBtn');
 const statusIndicator = document.getElementById('statusIndicator');
 const statusText = document.getElementById('statusText');
 
-// Load GitHub config and data
-loadGitHubConfig();
-updateSyncUI();
+// Initialize app
+initializeApp();
 
 // Add event listener for Add button
 addBtn.addEventListener('click', addCode);
@@ -209,6 +209,58 @@ renderCodeList();
 
 // ===== GitHub Gist Functions =====
 
+// Initialize the app
+async function initializeApp() {
+    // Check if running on Netlify
+    if (window.location.hostname.includes('netlify.app') || 
+        window.location.hostname.includes('.netlify.app')) {
+        isNetlifyDeployment = true;
+        await loadTokenFromNetlify();
+    } else {
+        loadGitHubConfig();
+    }
+    
+    updateSyncUI();
+}
+
+// Load token from Netlify function
+async function loadTokenFromNetlify() {
+    try {
+        statusText.textContent = 'Connecting to GitHub...';
+        
+        const response = await fetch('/.netlify/functions/get-token');
+        
+        if (!response.ok) {
+            throw new Error('Token not configured in Netlify');
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.token) {
+            githubToken = data.token;
+            // Also load gistId from localStorage if exists
+            gistId = localStorage.getItem('gistId') || '';
+            
+            // Hide setup button on Netlify deployment
+            if (setupBtn) {
+                setupBtn.style.display = 'none';
+            }
+            
+            console.log('✅ Token loaded from Netlify');
+            
+            // Load or create gist
+            await loadOrCreateGist();
+        } else {
+            throw new Error('Invalid token response');
+        }
+    } catch (error) {
+        console.error('Error loading token from Netlify:', error);
+        statusIndicator.className = 'status-indicator disconnected';
+        statusText.textContent = '⚠️ GitHub token not configured in Netlify';
+        alert('⚠️ Administrator: Please configure GITHUB_TOKEN in Netlify environment variables');
+    }
+}
+
 function loadGitHubConfig() {
     try {
         githubToken = localStorage.getItem('githubToken') || '';
@@ -262,15 +314,27 @@ async function saveGitHubToken() {
 
 function updateSyncUI() {
     if (githubToken) {
-        setupBtn.style.display = 'none';
+        // Hide setup button if on Netlify or token exists
+        if (isNetlifyDeployment) {
+            setupBtn.style.display = 'none';
+        } else {
+            setupBtn.style.display = 'none';
+        }
+        
         syncBtn.style.display = 'inline-block';
         statusIndicator.className = 'status-indicator connected';
         statusText.textContent = gistId ? `Connected to GitHub (${codeSnippets.length} snippets)` : 'Connected - Setting up...';
     } else {
-        setupBtn.style.display = 'inline-block';
-        syncBtn.style.display = 'none';
-        statusIndicator.className = 'status-indicator disconnected';
-        statusText.textContent = '⚠️ Setup GitHub to save your data';
+        if (isNetlifyDeployment) {
+            setupBtn.style.display = 'none';
+            statusIndicator.className = 'status-indicator disconnected';
+            statusText.textContent = '⚠️ Admin: Configure token in Netlify';
+        } else {
+            setupBtn.style.display = 'inline-block';
+            syncBtn.style.display = 'none';
+            statusIndicator.className = 'status-indicator disconnected';
+            statusText.textContent = '⚠️ Setup GitHub to save your data';
+        }
     }
 }
 

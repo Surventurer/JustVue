@@ -1,0 +1,22 @@
+{
+  "name": "code-manager",
+  "version": "1.0.0",
+  "description": "Code snippet manager with GitHub Gists storage",
+  "main": "index.html",
+  "scripts": {
+    "start": "echo 'Open index.html in your browser'",
+    "test": "echo 'No tests configured'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Surventurer/Code_Manager.git"
+  },
+  "keywords": [
+    "code-manager",
+    "snippets",
+    "github-gists",
+    "netlify"
+  ],
+  "author": "Surventurer",
+  "license": "MIT"
+}
