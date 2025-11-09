@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Manager</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Code Manager</h1>
+        
+        <div class="search-section">
+            <input type="text" id="searchInput" placeholder="🔍 Search by title...">
+        </div>
+        
+        <div class="input-section">
+            <input type="text" id="titleInput" placeholder="Enter a title for your code...">
+            <textarea id="codeInput" placeholder="Enter your code here..."></textarea>
+            <button id="addBtn" class="btn btn-add">Add Code</button>
+        </div>
+
+        <div class="code-list" id="codeList">
+            <!-- Code snippets will be added here -->
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
