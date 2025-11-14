@@ -8,6 +8,7 @@ let isNetlifyDeployment = false;
 
 // DOM elements
 const searchInput = document.getElementById('searchInput');
+const passwordInput = document.getElementById('passwordInput');
 const titleInput = document.getElementById('titleInput');
 const codeInput = document.getElementById('codeInput');
 const addBtn = document.getElementById('addBtn');
@@ -21,6 +22,14 @@ addBtn.addEventListener('click', addCode);
 
 // Add event listener for search input
 searchInput.addEventListener('input', renderCodeList);
+
+// Add event listener for Enter key in password (Enter to focus on title)
+passwordInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        titleInput.focus();
+    }
+});
 
 // Add event listener for Enter key in title (Enter to focus on code)
 titleInput.addEventListener('keydown', (e) => {
@@ -39,8 +48,15 @@ codeInput.addEventListener('keydown', (e) => {
 
 // Add code function
 function addCode() {
+    const password = passwordInput.value.trim();
     const title = titleInput.value.trim();
     const code = codeInput.value.trim();
+    
+    if (password === '') {
+        alert('Please enter a password!');
+        passwordInput.focus();
+        return;
+    }
     
     if (title === '') {
         alert('Please enter a title!');
@@ -58,13 +74,15 @@ function addCode() {
         id: Date.now(),
         title: title,
         code: code,
+        password: password,
         timestamp: new Date().toLocaleString()
     };
     
     codeSnippets.unshift(snippet);
+    passwordInput.value = '';
     titleInput.value = '';
     codeInput.value = '';
-    titleInput.focus();
+    passwordInput.focus();
     
     renderCodeList();
     
@@ -76,6 +94,20 @@ function addCode() {
 
 // Delete code function
 function deleteCode(id) {
+    const snippet = codeSnippets.find(s => s.id === id);
+    if (!snippet) return;
+    
+    const enteredPassword = prompt('Enter password to delete this snippet:');
+    
+    if (enteredPassword === null) {
+        return; // User cancelled
+    }
+    
+    if (enteredPassword !== snippet.password) {
+        alert('Incorrect password! Cannot delete snippet.');
+        return;
+    }
+    
     if (!confirm('Are you sure you want to delete this snippet?')) {
         return;
     }
