@@ -229,8 +229,6 @@ async function initializeApp() {
 // Load token from Netlify function
 async function loadTokenFromNetlify() {
     try {
-        console.log('Connecting to GitHub...');
-        
         const response = await fetch('/.netlify/functions/get-token');
         
         if (!response.ok) {
@@ -243,8 +241,6 @@ async function loadTokenFromNetlify() {
             githubToken = data.token;
             // Also load gistId from localStorage if exists
             gistId = localStorage.getItem('gistId') || '';
-            
-            console.log('✅ Token loaded from Netlify');
             
             // Load or create gist
             await loadOrCreateGist();
@@ -276,7 +272,6 @@ async function autoSyncToGitHub() {
     
     try {
         await updateGist();
-        console.log('✅ Auto-synced to GitHub');
     } catch (error) {
         console.error('Auto-sync error:', error);
     } finally {
@@ -311,7 +306,6 @@ async function createGist() {
     const data = await response.json();
     gistId = data.id;
     localStorage.setItem('gistId', gistId);
-    console.log('Gist created:', gistId);
 }
 
 async function updateGist() {
@@ -335,16 +329,12 @@ async function updateGist() {
         const error = await response.json();
         throw new Error(error.message || 'Failed to update gist');
     }
-    
-    console.log('Gist updated:', gistId);
 }
 
 async function loadFromGist() {
     if (!githubToken || !gistId) return false;
     
     try {
-        console.log('Loading from GitHub...');
-        
         const response = await fetch(`https://api.github.com/gists/${gistId}`, {
             headers: {
                 'Authorization': `token ${githubToken}`,
@@ -363,7 +353,6 @@ async function loadFromGist() {
         codeSnippets = cloudSnippets;
         renderCodeList();
         
-        console.log('✅ Loaded from GitHub:', cloudSnippets.length, 'snippets');
         return true;
     } catch (error) {
         console.error('Error loading from gist:', error);
@@ -372,8 +361,6 @@ async function loadFromGist() {
 }
 
 async function loadOrCreateGist() {
-    console.log('Checking for existing data...');
-    
     // Try to find existing gist
     try {
         const response = await fetch('https://api.github.com/gists', {
@@ -394,7 +381,6 @@ async function loadOrCreateGist() {
                 gistId = existingGist.id;
                 localStorage.setItem('gistId', gistId);
                 await loadFromGist();
-                console.log(`✅ Connected (${codeSnippets.length} snippets loaded)`);
                 return;
             }
         }
@@ -405,7 +391,6 @@ async function loadOrCreateGist() {
     // Create new gist if none exists
     try {
         await createGist();
-        console.log('✅ Connected - Ready to save!');
     } catch (error) {
         console.error('Error creating gist:', error);
         console.error('❌ Failed to setup - Try again');
@@ -415,10 +400,7 @@ async function loadOrCreateGist() {
 // Load from GitHub on startup if configured
 if (githubToken && gistId) {
     loadFromGist().then(success => {
-        if (success) {
-            console.log('✅ Data loaded from GitHub');
-        } else {
-            console.log('⚠️ Using empty state');
+        if (!success) {
             renderCodeList();
         }
     });
