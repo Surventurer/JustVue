@@ -8,6 +8,44 @@ let isNetlifyDeployment = false;
 
 // Hide content feature variables
 let unlockedSnippets = new Set(); // Track which snippets are unlocked in this session
+let decryptedContent = new Map(); // Cache decrypted content
+
+// ===== Encryption/Decryption Functions =====
+
+// Simple encryption using AES-like algorithm (XOR-based for simplicity)
+function encryptContent(text, password) {
+    const key = generateKey(password);
+    let encrypted = '';
+    for (let i = 0; i < text.length; i++) {
+        const charCode = text.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+        encrypted += String.fromCharCode(charCode);
+    }
+    return btoa(encrypted); // Base64 encode
+}
+
+function decryptContent(encryptedText, password) {
+    try {
+        const key = generateKey(password);
+        const encrypted = atob(encryptedText); // Base64 decode
+        let decrypted = '';
+        for (let i = 0; i < encrypted.length; i++) {
+            const charCode = encrypted.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+            decrypted += String.fromCharCode(charCode);
+        }
+        return decrypted;
+    } catch (e) {
+        return null; // Decryption failed
+    }
+}
+
+function generateKey(password) {
+    // Create a longer key from password
+    let key = password;
+    while (key.length < 256) {
+        key += password;
+    }
+    return key;
+}
 
 // DOM elements
 const searchInput = document.getElementById('searchInput');
@@ -78,11 +116,11 @@ function addCode() {
     const snippet = {
         id: Date.now(),
         title: title,
-        code: code,
+        code: hideContent ? encryptContent(code, password) : code, // Encrypt if hidden
         password: password,
         timestamp: new Date().toLocaleString(),
         hidden: hideContent,
-        protectionPassword: hideContent ? password : null  // Store protection password per snippet
+        isEncrypted: hideContent // Flag to know if code is encrypted
     };
     
     codeSnippets.unshift(snippet);
@@ -132,24 +170,34 @@ function deleteCode(id) {
 // Copy to clipboard function
 function copyToClipboard(id, code, button) {
     const snippet = codeSnippets.find(s => s.id === id);
+    let contentToCopy = code;
     
-    // Check if snippet is hidden and not unlocked
-    if (snippet && snippet.hidden && !unlockedSnippets.has(id)) {
-        const enteredPassword = prompt('Enter password to copy:');
-        
-        if (enteredPassword === null) {
-            return; // User cancelled
+    // Check if snippet is encrypted and needs decryption
+    if (snippet && snippet.isEncrypted) {
+        // Check if already decrypted in cache
+        if (decryptedContent.has(id)) {
+            contentToCopy = decryptedContent.get(id);
+        } else {
+            // Need password to decrypt
+            const enteredPassword = prompt('Enter password to copy:');
+            
+            if (enteredPassword === null) {
+                return; // User cancelled
+            }
+            
+            // Try to decrypt
+            const decrypted = decryptContent(snippet.code, enteredPassword);
+            if (!decrypted) {
+                alert('Incorrect password! Cannot copy content.');
+                return;
+            }
+            
+            contentToCopy = decrypted;
+            // Don't cache it since we're not unlocking the view
         }
-        
-        if (enteredPassword !== snippet.protectionPassword) {
-            alert('Incorrect password! Cannot copy content.');
-            return;
-        }
-        
-        // Password correct, proceed with copying (but don't unlock the view)
     }
     
-    navigator.clipboard.writeText(code).then(() => {
+    navigator.clipboard.writeText(contentToCopy).then(() => {
         const originalText = button.textContent;
         button.textContent = '✓ Copied!';
         button.classList.add('copied');
@@ -197,6 +245,13 @@ function renderCodeList() {
         const isProtected = snippet.hidden && !unlockedSnippets.has(snippet.id);
         const contentClass = isProtected ? 'code-content protected' : 'code-content';
         
+        // Get the display content (decrypted if unlocked, encrypted if locked)
+        let displayContent = snippet.code;
+        if (snippet.isEncrypted && unlockedSnippets.has(snippet.id)) {
+            // Show decrypted content if unlocked
+            displayContent = decryptedContent.get(snippet.id) || snippet.code;
+        }
+        
         // Create eye button for hidden content (both locked and unlocked)
         let eyeButton = '';
         if (snippet.hidden) {
@@ -219,10 +274,10 @@ function renderCodeList() {
                 <div class="timestamp">Added: ${snippet.timestamp}</div>
                 <div class="code-content-wrapper">
                     ${eyeButton}
-                    <div class="${contentClass}">${escapeHtml(snippet.code)}</div>
+                    <div class="${contentClass}">${escapeHtml(displayContent)}</div>
                 </div>
                 <div class="code-actions">
-                    <button class="btn btn-copy" onclick="copyToClipboard(${snippet.id}, \`${escapeForJS(snippet.code)}\`, this)">
+                    <button class="btn btn-copy" onclick="copyToClipboard(${snippet.id}, \`${escapeForJS(displayContent)}\`, this)">
                         📋 Copy to Clipboard
                     </button>
                     <button class="btn btn-delete" onclick="deleteCode(${snippet.id})">
@@ -271,9 +326,15 @@ function unlockContent(id) {
         return; // User cancelled
     }
     
-    if (enteredPassword !== snippet.protectionPassword) {
-        alert('Incorrect password! Content remains hidden.');
-        return;
+    // Try to decrypt the content
+    if (snippet.isEncrypted) {
+        const decrypted = decryptContent(snippet.code, enteredPassword);
+        if (!decrypted) {
+            alert('Incorrect password! Content remains hidden.');
+            return;
+        }
+        // Cache the decrypted content
+        decryptedContent.set(id, decrypted);
     }
     
     // Unlock this snippet for this session
@@ -285,6 +346,8 @@ function unlockContent(id) {
 function lockContent(id) {
     // Remove from unlocked set to hide it again
     unlockedSnippets.delete(id);
+    // Clear decrypted cache
+    decryptedContent.delete(id);
     renderCodeList();
 }
 
