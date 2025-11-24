@@ -7,7 +7,6 @@ let autoSyncEnabled = true;
 let isNetlifyDeployment = false;
 
 // Hide content feature variables
-let contentProtectionPassword = '';
 let unlockedSnippets = new Set(); // Track which snippets are unlocked in this session
 
 // DOM elements
@@ -76,33 +75,14 @@ function addCode() {
         return;
     }
     
-    // If hide content is checked, set up protection password if not exists
-    if (hideContent && !contentProtectionPassword) {
-        const protectionPassword = prompt('Set a protection password for hiding content:');
-        
-        if (!protectionPassword) {
-            alert('Protection password is required to hide content!');
-            return;
-        }
-        
-        const confirmPassword = prompt('Confirm your protection password:');
-        
-        if (protectionPassword !== confirmPassword) {
-            alert('Passwords do not match! Please try again.');
-            return;
-        }
-        
-        contentProtectionPassword = protectionPassword;
-        localStorage.setItem('contentProtectionPassword', contentProtectionPassword);
-    }
-    
     const snippet = {
         id: Date.now(),
         title: title,
         code: code,
         password: password,
         timestamp: new Date().toLocaleString(),
-        hidden: hideContent
+        hidden: hideContent,
+        protectionPassword: hideContent ? password : null  // Store protection password per snippet
     };
     
     codeSnippets.unshift(snippet);
@@ -155,13 +135,13 @@ function copyToClipboard(id, code, button) {
     
     // Check if snippet is hidden and not unlocked
     if (snippet && snippet.hidden && !unlockedSnippets.has(id)) {
-        const enteredPassword = prompt('Enter protection password to copy:');
+        const enteredPassword = prompt('Enter password to copy:');
         
         if (enteredPassword === null) {
             return; // User cancelled
         }
         
-        if (enteredPassword !== contentProtectionPassword) {
+        if (enteredPassword !== snippet.protectionPassword) {
             alert('Incorrect password! Cannot copy content.');
             return;
         }
@@ -282,13 +262,16 @@ function escapeForJS(text) {
 
 // Unlock content (called when clicking on protected content)
 function unlockContent(id) {
-    const enteredPassword = prompt('Enter protection password to view content:');
+    const snippet = codeSnippets.find(s => s.id === id);
+    if (!snippet) return;
+    
+    const enteredPassword = prompt('Enter password to view content:');
     
     if (enteredPassword === null) {
         return; // User cancelled
     }
     
-    if (enteredPassword !== contentProtectionPassword) {
+    if (enteredPassword !== snippet.protectionPassword) {
         alert('Incorrect password! Content remains hidden.');
         return;
     }
@@ -305,17 +288,7 @@ function lockContent(id) {
     renderCodeList();
 }
 
-// Load hide content settings on startup
-function loadHideContentSettings() {
-    const savedPassword = localStorage.getItem('contentProtectionPassword');
-    
-    if (savedPassword) {
-        contentProtectionPassword = savedPassword;
-    }
-}
-
 // Initial render
-loadHideContentSettings();
 renderCodeList();
 
 // ===== GitHub Gist Functions =====
