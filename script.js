@@ -1,10 +1,5 @@
 // Code snippets storage
 let codeSnippets = [];
-let githubToken = '';
-let gistId = '';
-let isSyncing = false;
-let autoSyncEnabled = true;
-let isNetlifyDeployment = false;
 
 // Hide content feature variables
 let unlockedSnippets = new Set(); // Track which snippets are unlocked in this session
@@ -131,11 +126,7 @@ function addCode() {
     passwordInput.focus();
     
     renderCodeList();
-    
-    // Auto-sync to GitHub after adding
-    if (githubToken && gistId && autoSyncEnabled) {
-        autoSyncToGitHub();
-    }
+    saveToDatabaseJSON();
 }
 
 // Delete code function
@@ -160,11 +151,7 @@ function deleteCode(id) {
     
     codeSnippets = codeSnippets.filter(snippet => snippet.id !== id);
     renderCodeList();
-    
-    // Auto-sync to GitHub after deleting
-    if (githubToken && gistId && autoSyncEnabled) {
-        autoSyncToGitHub();
-    }
+    saveToDatabaseJSON();
 }
 
 // Copy to clipboard function
@@ -354,200 +341,108 @@ function lockContent(id) {
 // Initial render
 renderCodeList();
 
-// ===== GitHub Gist Functions =====
+// ===== Database Storage Functions =====
+
+let isSaving = false;
+let isNetlifyEnvironment = false;
+
+// Check if running on Netlify
+function checkEnvironment() {
+    // Check if we're on Netlify by hostname
+    const hostname = window.location.hostname;
+    const isNetlify = hostname.includes('netlify.app') || hostname.includes('.netlify.app');
+    isNetlifyEnvironment = isNetlify;
+    return isNetlify;
+}
+
+// Save to storage (database.json on Netlify, localStorage locally)
+async function saveToDatabaseJSON() {
+    if (isSaving) return;
+    
+    isSaving = true;
+    
+    try {
+        if (isNetlifyEnvironment) {
+            // On Netlify: use serverless function to save to database.json
+            const response = await fetch('/.netlify/functions/save-data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(codeSnippets)
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to save data');
+            }
+            
+            console.log('✅ Saved to database.json');
+        } else {
+            // Locally: use localStorage
+            localStorage.setItem('codeSnippets', JSON.stringify(codeSnippets));
+            console.log('✅ Saved to localStorage (local mode)');
+        }
+    } catch (error) {
+        console.error('Error saving:', error);
+        // Fallback to localStorage if Netlify function fails
+        try {
+            localStorage.setItem('codeSnippets', JSON.stringify(codeSnippets));
+            console.log('⚠️ Fallback: Saved to localStorage');
+        } catch (e) {
+            alert('⚠️ Failed to save data. Please try again.');
+        }
+    } finally {
+        isSaving = false;
+    }
+}
+
+// Load from storage (database.json on Netlify, localStorage locally)
+async function loadFromDatabaseJSON() {
+    try {
+        if (isNetlifyEnvironment) {
+            // On Netlify: load from database.json via serverless function
+            const response = await fetch('/.netlify/functions/get-data');
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                if (Array.isArray(data) && data.length > 0) {
+                    codeSnippets = data;
+                    console.log(`✅ Loaded ${data.length} snippets from database.json`);
+                    return;
+                }
+            }
+        }
+        
+        // Locally or fallback: load from localStorage
+        const stored = localStorage.getItem('codeSnippets');
+        if (stored) {
+            codeSnippets = JSON.parse(stored);
+            console.log(`✅ Loaded ${codeSnippets.length} snippets from localStorage`);
+        }
+    } catch (error) {
+        console.error('Error loading:', error);
+        // Try localStorage as fallback
+        try {
+            const stored = localStorage.getItem('codeSnippets');
+            if (stored) {
+                codeSnippets = JSON.parse(stored);
+            }
+        } catch (e) {
+            console.error('Failed to load from localStorage:', e);
+        }
+    }
+}
 
 // Initialize the app
 async function initializeApp() {
-    // Check if running on Netlify
-    if (window.location.hostname.includes('netlify.app') || 
-        window.location.hostname.includes('.netlify.app')) {
-        isNetlifyDeployment = true;
-        await loadTokenFromNetlify();
-    } else {
-        loadGitHubConfig();
-    }
-}
-
-// Load token from Netlify function
-async function loadTokenFromNetlify() {
-    try {
-        const response = await fetch('/.netlify/functions/get-token');
-        
-        if (!response.ok) {
-            throw new Error('Token not configured in Netlify');
-        }
-        
-        const data = await response.json();
-        
-        if (data.success && data.token) {
-            githubToken = data.token;
-            // Also load gistId from localStorage if exists
-            gistId = localStorage.getItem('gistId') || '';
-            
-            // Load or create gist
-            await loadOrCreateGist();
-        } else {
-            throw new Error('Invalid token response');
-        }
-    } catch (error) {
-        console.error('Error loading token from Netlify:', error);
-        console.error('⚠️ GitHub token not configured in Netlify');
-    }
-}
-
-function loadGitHubConfig() {
-    try {
-        githubToken = localStorage.getItem('githubToken') || '';
-        gistId = localStorage.getItem('gistId') || '';
-    } catch (error) {
-        console.error('Error loading GitHub config:', error);
-    }
-}
-
-// Auto-sync function (silent, no alerts)
-async function autoSyncToGitHub() {
-    if (!githubToken || !gistId || isSyncing) {
-        return;
-    }
-    
-    isSyncing = true;
-    
-    try {
-        await updateGist();
-    } catch (error) {
-        console.error('Auto-sync error:', error);
-    } finally {
-        isSyncing = false;
-    }
-}
-
-async function createGist() {
-    const response = await fetch('https://api.github.com/gists', {
-        method: 'POST',
-        headers: {
-            'Authorization': `token ${githubToken}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/vnd.github.v3+json'
-        },
-        body: JSON.stringify({
-            description: 'Code Manager - My Code Snippets',
-            public: false,
-            files: {
-                'code-snippets.json': {
-                    content: JSON.stringify(codeSnippets, null, 2)
-                }
-            }
-        })
-    });
-    
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to create gist');
-    }
-    
-    const data = await response.json();
-    gistId = data.id;
-    localStorage.setItem('gistId', gistId);
-}
-
-async function updateGist() {
-    const response = await fetch(`https://api.github.com/gists/${gistId}`, {
-        method: 'PATCH',
-        headers: {
-            'Authorization': `token ${githubToken}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/vnd.github.v3+json'
-        },
-        body: JSON.stringify({
-            files: {
-                'code-snippets.json': {
-                    content: JSON.stringify(codeSnippets, null, 2)
-                }
-            }
-        })
-    });
-    
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to update gist');
-    }
-}
-
-async function loadFromGist() {
-    if (!githubToken || !gistId) return false;
-    
-    try {
-        const response = await fetch(`https://api.github.com/gists/${gistId}`, {
-            headers: {
-                'Authorization': `token ${githubToken}`,
-                'Accept': 'application/vnd.github.v3+json'
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error('Failed to load from gist');
-        }
-        
-        const data = await response.json();
-        const content = data.files['code-snippets.json'].content;
-        const cloudSnippets = JSON.parse(content);
-        
-        codeSnippets = cloudSnippets;
-        renderCodeList();
-        
-        return true;
-    } catch (error) {
-        console.error('Error loading from gist:', error);
-        return false;
-    }
-}
-
-async function loadOrCreateGist() {
-    // Try to find existing gist
-    try {
-        const response = await fetch('https://api.github.com/gists', {
-            headers: {
-                'Authorization': `token ${githubToken}`,
-                'Accept': 'application/vnd.github.v3+json'
-            }
-        });
-        
-        if (response.ok) {
-            const gists = await response.json();
-            const existingGist = gists.find(g => 
-                g.description === 'Code Manager - My Code Snippets' && 
-                g.files['code-snippets.json']
-            );
-            
-            if (existingGist) {
-                gistId = existingGist.id;
-                localStorage.setItem('gistId', gistId);
-                await loadFromGist();
-                return;
-            }
-        }
-    } catch (error) {
-        console.error('Error checking existing gists:', error);
-    }
-    
-    // Create new gist if none exists
-    try {
-        await createGist();
-    } catch (error) {
-        console.error('Error creating gist:', error);
-        console.error('❌ Failed to setup - Try again');
-    }
-}
-
-// Load from GitHub on startup if configured
-if (githubToken && gistId) {
-    loadFromGist().then(success => {
-        if (!success) {
-            renderCodeList();
-        }
-    });
-} else if (githubToken && !gistId) {
-    loadOrCreateGist();
-} else {
+    checkEnvironment();
+    await loadFromDatabaseJSON();
     renderCodeList();
+    
+    if (isNetlifyEnvironment) {
+        console.log('💾 Storage: database.json (Netlify)');
+    } else {
+        console.log('💾 Storage: localStorage (Local mode - data will sync to database.json when deployed to Netlify)');
+    }
 }
