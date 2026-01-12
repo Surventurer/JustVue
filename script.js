@@ -370,82 +370,50 @@ renderCodeList();
 
 let isSaving = false;
 
-// Check if running on Netlify
-function isNetlifyEnvironment() {
-    const hostname = window.location.hostname;
-    return hostname.includes('netlify.app') || hostname.includes('.netlify.app');
-}
-
-// Save to storage (database.json on Netlify, localStorage locally)
+// Save to database only
 async function saveToDatabaseJSON() {
     if (isSaving) return;
     
     isSaving = true;
     
     try {
-        if (isNetlifyEnvironment()) {
-            // On Netlify: use serverless function to save to database.json
-            const response = await fetch('/.netlify/functions/save-data', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(codeSnippets)
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to save data');
-            }
-        } else {
-            // Locally: use localStorage
-            localStorage.setItem('codeSnippets', JSON.stringify(codeSnippets));
+        const response = await fetch('/.netlify/functions/save-data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(codeSnippets)
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to save data');
         }
     } catch (error) {
         console.error('Error saving:', error);
-        // Fallback to localStorage if Netlify function fails
-        try {
-            localStorage.setItem('codeSnippets', JSON.stringify(codeSnippets));
-        } catch (e) {
-            alert('⚠️ Failed to save data. Please try again.');
-        }
+        alert('⚠️ Failed to save data to database. Please try again.');
+        throw error;
     } finally {
         isSaving = false;
     }
 }
 
-// Load from storage (database.json on Netlify, localStorage locally)
+// Load from database only
 async function loadFromDatabaseJSON() {
     try {
-        if (isNetlifyEnvironment()) {
-            // On Netlify: load from database.json via serverless function
-            const response = await fetch('/.netlify/functions/get-data');
-            
-            if (response.ok) {
-                const data = await response.json();
-                
-                if (Array.isArray(data) && data.length > 0) {
-                    codeSnippets = data;
-                    return;
-                }
-            }
-        }
+        const response = await fetch('/.netlify/functions/get-data');
         
-        // Locally or fallback: load from localStorage
-        const stored = localStorage.getItem('codeSnippets');
-        if (stored) {
-            codeSnippets = JSON.parse(stored);
+        if (response.ok) {
+            const data = await response.json();
+            
+            if (Array.isArray(data) && data.length > 0) {
+                codeSnippets = data;
+            }
+        } else {
+            console.error('Failed to load data from database');
         }
     } catch (error) {
-        console.error('Error loading:', error);
-        // Try localStorage as fallback
-        try {
-            const stored = localStorage.getItem('codeSnippets');
-            if (stored) {
-                codeSnippets = JSON.parse(stored);
-            }
-        } catch (e) {
-            console.error('Failed to load from localStorage:', e);
-        }
+        console.error('Error loading from database:', error);
+        alert('⚠️ Failed to load data from database. Please check your connection.');
     }
 }
 
