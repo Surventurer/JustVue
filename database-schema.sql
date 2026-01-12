@@ -9,15 +9,16 @@ CREATE TABLE IF NOT EXISTS code_snippets (
     timestamp TEXT NOT NULL,
     hidden BOOLEAN DEFAULT FALSE,
     is_encrypted BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    content_type VARCHAR(50) DEFAULT 'text',
+    file_name TEXT,
+    file_type VARCHAR(100)
 );
 
 -- Create index for faster queries
 CREATE INDEX IF NOT EXISTS idx_code_snippets_id ON code_snippets(id DESC);
 
--- Future-ready columns for images and PDFs (optional, uncomment when needed)
--- ALTER TABLE code_snippets ADD COLUMN content_type VARCHAR(50) DEFAULT 'code';
--- ALTER TABLE code_snippets ADD COLUMN file_url TEXT;
--- ALTER TABLE code_snippets ADD COLUMN file_name TEXT;
--- ALTER TABLE code_snippets ADD COLUMN file_mime_type VARCHAR(100);
--- ALTER TABLE code_snippets ADD COLUMN file_size BIGINT;
+-- MIGRATION: If you already have the table, run this to add new columns:
+-- ALTER TABLE code_snippets ADD COLUMN IF NOT EXISTS content_type VARCHAR(50) DEFAULT 'text';
+-- ALTER TABLE code_snippets ADD COLUMN IF NOT EXISTS file_name TEXT;
+-- ALTER TABLE code_snippets ADD COLUMN IF NOT EXISTS file_type VARCHAR(100);

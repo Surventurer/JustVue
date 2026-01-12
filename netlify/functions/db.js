@@ -43,10 +43,14 @@ async function getAllSnippets() {
     id: row.id,
     title: row.title,
     code: row.code,
+    content: row.code, // Map code to content for new structure
     password: row.password,
     timestamp: row.timestamp,
     hidden: row.hidden,
-    isEncrypted: row.is_encrypted // Map is_encrypted to isEncrypted
+    isEncrypted: row.is_encrypted,
+    contentType: row.content_type || 'text',
+    fileName: row.file_name,
+    fileType: row.file_type
   }));
 }
 
@@ -63,17 +67,26 @@ async function saveAllSnippets(snippets) {
     
     // Insert new snippets
     for (const snippet of snippets) {
+      // Support both old 'code' and new 'content' properties
+      const codeValue = snippet.code || snippet.content || '';
+      const contentType = snippet.contentType || 'text';
+      const fileName = snippet.fileName || null;
+      const fileType = snippet.fileType || null;
+      
       await client.query(
-        `INSERT INTO code_snippets (id, title, code, password, timestamp, hidden, is_encrypted)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        `INSERT INTO code_snippets (id, title, code, password, timestamp, hidden, is_encrypted, content_type, file_name, file_type)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
           snippet.id,
           snippet.title,
-          snippet.code,
+          codeValue,
           snippet.password,
           snippet.timestamp,
           snippet.hidden || false,
-          snippet.isEncrypted || false
+          snippet.isEncrypted || false,
+          contentType,
+          fileName,
+          fileType
         ]
       );
     }
