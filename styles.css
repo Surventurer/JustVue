@@ -225,8 +225,8 @@ h1 {
 }
 
 .code-content {
-    background: #282c34;
-    color: #abb2bf;
+    background: #f8f9fa;
+    color: #333;
     padding: 15px;
     border-radius: 6px;
     font-family: 'Courier New', monospace;
@@ -236,6 +236,7 @@ h1 {
     margin-bottom: 10px;
     max-height: 300px;
     overflow-y: auto;
+    border: 1px solid #dee2e6;
 }
 
 .code-content.protected {
@@ -244,6 +245,8 @@ h1 {
     user-select: none;
     pointer-events: none;
     min-height: 80px;
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
 }
 
 .code-content-wrapper {
