@@ -131,11 +131,17 @@ function addCode() {
 
 // Delete code function
 async function deleteCode(id) {
+    console.log('Delete called with ID:', id, 'Type:', typeof id);
+    
     const snippet = codeSnippets.find(s => s.id === id);
+    
     if (!snippet) {
-        alert('Snippet not found!');
+        console.log('Snippet not found. Available IDs:', codeSnippets.map(s => s.id));
+        alert('❌ Snippet not found!');
         return;
     }
+    
+    console.log('Found snippet:', snippet.title);
     
     const enteredPassword = prompt('Enter password to delete this snippet:');
     
@@ -152,8 +158,14 @@ async function deleteCode(id) {
         return;
     }
     
+    console.log('Deleting snippet from array...');
+    
     // Remove from local array
+    const beforeLength = codeSnippets.length;
     codeSnippets = codeSnippets.filter(s => s.id !== id);
+    const afterLength = codeSnippets.length;
+    
+    console.log('Array length before:', beforeLength, 'after:', afterLength);
     
     // Remove from unlocked cache if present
     unlockedSnippets.delete(id);
@@ -164,16 +176,22 @@ async function deleteCode(id) {
     
     // Save to database
     try {
+        console.log('Saving to database...');
         await saveToDatabaseJSON();
+        console.log('Successfully saved to database');
+        
         // Show success feedback briefly
         const tempDiv = document.createElement('div');
         tempDiv.style.cssText = 'position:fixed;top:20px;right:20px;background:#4CAF50;color:white;padding:15px 25px;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,0.1);z-index:10000;font-family:Arial,sans-serif;';
-        tempDiv.textContent = '✓ Snippet deleted successfully!';
+        tempDiv.textContent = '✓ Snippet deleted from database!';
         document.body.appendChild(tempDiv);
         setTimeout(() => tempDiv.remove(), 2000);
     } catch (error) {
-        console.error('Error deleting snippet:', error);
-        alert('⚠️ Warning: Snippet removed from display but there was an error saving to database. Please refresh the page.');
+        console.error('Error saving to database:', error);
+        alert('⚠️ Error: Snippet removed from display but failed to save to database. Please refresh the page.');
+        // Reload from database to restore correct state
+        await loadFromDatabaseJSON();
+        renderCodeList();
     }
 }
 
@@ -300,7 +318,7 @@ function renderCodeList() {
 }
 
 // Event delegation for buttons
-codeList.addEventListener('click', function(e) {
+codeList.addEventListener('click', async function(e) {
     const button = e.target.closest('button[data-action]');
     if (!button) return;
     
@@ -308,7 +326,7 @@ codeList.addEventListener('click', function(e) {
     const id = parseInt(button.dataset.id, 10);
     
     if (action === 'delete') {
-        deleteCode(id);
+        await deleteCode(id);
     } else if (action === 'copy') {
         const snippet = codeSnippets.find(s => s.id === id);
         if (snippet) {
@@ -392,10 +410,16 @@ renderCodeList();
 // ===== Database Storage Functions =====
 
 let isSaving = false;
+let saveQueue = [];
 
 // Save to database only
 async function saveToDatabaseJSON() {
-    if (isSaving) return;
+    // If already saving, wait for it to finish then save again
+    if (isSaving) {
+        return new Promise((resolve, reject) => {
+            saveQueue.push({ resolve, reject });
+        });
+    }
     
     isSaving = true;
     
@@ -409,7 +433,23 @@ async function saveToDatabaseJSON() {
         });
         
         if (!response.ok) {
-            throw new Error('Failed to save data');
+            const errorText = await response.text();
+            throw new Error(`Failed to save data: ${errorText}`);
+        }
+        
+        // Process queued saves
+        if (saveQueue.length > 0) {
+            const queued = saveQueue.slice();
+            saveQueue = [];
+            isSaving = false;
+            
+            // Save again with the latest data
+            try {
+                await saveToDatabaseJSON();
+                queued.forEach(q => q.resolve());
+            } catch (error) {
+                queued.forEach(q => q.reject(error));
+            }
         }
     } catch (error) {
         console.error('Error saving:', error);
