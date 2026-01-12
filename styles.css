@@ -474,3 +474,272 @@ h1 {
         font-size: 11px;
     }
 }
+
+/* New Content Type Styles */
+.content-type-selector {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.type-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: white;
+}
+
+.type-option:hover {
+    border-color: #667eea;
+    background: #f8f9ff;
+    transform: translateY(-2px);
+}
+
+.type-option input[type="radio"] {
+    cursor: pointer;
+}
+
+.type-option input[type="radio"]:checked ~ span {
+    color: #667eea;
+    font-weight: bold;
+}
+
+.type-option span {
+    font-size: 14px;
+    color: #333;
+    transition: all 0.3s;
+}
+
+/* File Upload Area */
+#fileUploadArea {
+    margin: 20px 0;
+    padding: 30px;
+    border: 3px dashed #667eea;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
+    text-align: center;
+    transition: all 0.3s;
+}
+
+#fileUploadArea:hover {
+    border-color: #764ba2;
+    background: linear-gradient(135deg, #f0f2ff 0%, #e8ebff 100%);
+    transform: scale(1.01);
+}
+
+.btn-file-select {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 15px 40px;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    font-weight: 600;
+}
+
+.btn-file-select:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.btn-file-select:active {
+    transform: translateY(0);
+}
+
+.file-preview-container {
+    padding: 20px;
+    background: white;
+    border-radius: 12px;
+    margin-top: 20px;
+    text-align: center;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.file-preview-container img {
+    max-width: 100%;
+    max-height: 250px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.file-preview-container p {
+    color: #666;
+    font-size: 14px;
+    margin: 10px 0;
+    font-weight: 500;
+}
+
+.btn-clear-file {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: all 0.3s;
+}
+
+.btn-clear-file:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+}
+
+.file-preview-container {
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.file-preview-container img {
+    max-width: 100%;
+    border-radius: 8px;
+    margin-bottom: 10px;
+}
+
+.file-preview-container p {
+    color: #666;
+    font-size: 14px;
+    margin: 5px 0;
+}
+
+.snippet-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.type-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.snippet-content {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 10px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.snippet-content.protected {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    text-align: center;
+    font-weight: bold;
+    padding: 40px;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+.snippet-content img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+
+.pdf-container {
+    width: 100%;
+    min-height: 400px;
+}
+
+.pdf-container embed {
+    border-radius: 8px;
+    border: 1px solid #ddd;
+}
+
+.file-name {
+    margin-top: 10px;
+    color: #666;
+    font-size: 14px;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+.btn-download {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.btn-download:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(240, 147, 251, 0.4);
+}
+
+@media (max-width: 600px) {
+    .content-type-selector {
+        flex-direction: row;
+        gap: 8px;
+    }
+    
+    .type-option {
+        flex: 1;
+        justify-content: center;
+        padding: 8px 10px;
+    }
+    
+    .type-option span {
+        font-size: 12px;
+    }
+    
+    .snippet-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    #fileUploadArea {
+        padding: 20px 15px;
+    }
+    
+    .btn-file-select {
+        padding: 12px 30px;
+        font-size: 14px;
+        width: 100%;
+    }
+    
+    .file-preview-container {
+        padding: 15px;
+    }
+    
+    .file-preview-container img {
+        max-height: 180px;
+    }
+}

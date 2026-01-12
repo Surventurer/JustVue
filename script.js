@@ -62,9 +62,83 @@ const searchInput = document.getElementById('searchInput');
 const passwordInput = document.getElementById('passwordInput');
 const titleInput = document.getElementById('titleInput');
 const codeInput = document.getElementById('codeInput');
+const fileInput = document.getElementById('fileInput');
+const filePreview = document.getElementById('filePreview');
+const fileUploadArea = document.getElementById('fileUploadArea');
+const fileSelectBtn = document.getElementById('fileSelectBtn');
 const addBtn = document.getElementById('addBtn');
 const codeList = document.getElementById('codeList');
 const hideContentToggle = document.getElementById('hideContentToggle');
+
+// Content type management
+let selectedFile = null;
+let selectedContentType = 'text';
+
+// Content type selector handler
+document.querySelectorAll('input[name="contentType"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        selectedContentType = e.target.value;
+        updateInputVisibility();
+    });
+});
+
+// File select button handler
+fileSelectBtn.addEventListener('click', () => {
+    fileInput.click();
+});
+
+// File input handler
+fileInput.addEventListener('change', handleFileSelect);
+
+function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    selectedFile = file;
+    
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        filePreview.style.display = 'block';
+        
+        if (file.type.startsWith('image/')) {
+            filePreview.innerHTML = `
+                <div class="file-preview-container">
+                    <img src="${event.target.result}" alt="Preview" style="max-width: 100%; max-height: 200px;">
+                    <p>📁 ${file.name} (${(file.size / 1024).toFixed(2)} KB)</p>
+                    <button type="button" onclick="clearFileSelection()" class="btn-clear-file">✕ Remove</button>
+                </div>
+            `;
+        } else if (file.type === 'application/pdf') {
+            filePreview.innerHTML = `
+                <div class="file-preview-container">
+                    <p>📄 ${file.name} (${(file.size / 1024).toFixed(2)} KB)</p>
+                    <button type="button" onclick="clearFileSelection()" class="btn-clear-file">✕ Remove</button>
+                </div>
+            `;
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+function clearFileSelection() {
+    selectedFile = null;
+    fileInput.value = '';
+    filePreview.style.display = 'none';
+    filePreview.innerHTML = '';
+}
+
+function updateInputVisibility() {
+    if (selectedContentType === 'text') {
+        codeInput.style.display = 'block';
+        fileUploadArea.style.display = 'none';
+        clearFileSelection();
+    } else {
+        codeInput.style.display = 'none';
+        fileUploadArea.style.display = 'block';
+        fileInput.accept = selectedContentType === 'image' ? 'image/*' : '.pdf';
+    }
+}
 
 // Initialize app
 initializeApp();
@@ -99,10 +173,9 @@ codeInput.addEventListener('keydown', (e) => {
 });
 
 // Add code function
-function addCode() {
+async function addCode() {
     const password = passwordInput.value.trim();
     const title = titleInput.value.trim();
-    const code = codeInput.value.trim();
     const hideContent = hideContentToggle.checked;
     
     if (password === '') {
@@ -117,31 +190,72 @@ function addCode() {
         return;
     }
     
-    if (code === '') {
-        alert('Please enter some code!');
-        codeInput.focus();
-        return;
+    let content = '';
+    let contentType = selectedContentType;
+    
+    // Handle different content types
+    if (contentType === 'text') {
+        const code = codeInput.value.trim();
+        if (code === '') {
+            alert('Please enter some text/code!');
+            codeInput.focus();
+            return;
+        }
+        content = code;
+    } else if (contentType === 'image' || contentType === 'pdf') {
+        if (!selectedFile) {
+            alert('Please select a file!');
+            return;
+        }
+        
+        // Read file as base64
+        try {
+            content = await readFileAsBase64(selectedFile);
+        } catch (error) {
+            alert('Failed to read file!');
+            console.error(error);
+            return;
+        }
     }
     
     const snippet = {
         id: Date.now(),
         title: title,
-        code: hideContent ? encryptContent(code, password) : code, // Encrypt if hidden
+        contentType: contentType,
+        content: hideContent ? encryptContent(content, password) : content,
+        fileName: selectedFile ? selectedFile.name : null,
+        fileType: selectedFile ? selectedFile.type : null,
         password: password,
         timestamp: new Date().toLocaleString(),
         hidden: hideContent,
-        isEncrypted: hideContent // Flag to know if code is encrypted
+        isEncrypted: hideContent
     };
     
     codeSnippets.unshift(snippet);
+    
+    // Reset form
     passwordInput.value = '';
     titleInput.value = '';
     codeInput.value = '';
     hideContentToggle.checked = false;
+    clearFileSelection();
+    document.querySelector('input[name="contentType"][value="text"]').checked = true;
+    selectedContentType = 'text';
+    updateInputVisibility();
     passwordInput.focus();
     
     renderCodeList();
     saveToDatabaseJSON();
+}
+
+// Helper function to read file as base64
+function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
 }
 
 // Delete code function
@@ -221,7 +335,8 @@ function copyToClipboard(id, button) {
         return;
     }
     
-    let contentToCopy = snippet.code;
+    // Use content property or fallback to code for backward compatibility
+    let contentToCopy = snippet.content || snippet.code || '';
     
     // Check if snippet is encrypted and needs decryption
     if (snippet.isEncrypted) {
@@ -242,7 +357,7 @@ function copyToClipboard(id, button) {
             }
             
             // Try to decrypt with the correct password
-            const decrypted = decryptContent(snippet.code, enteredPassword);
+            const decrypted = decryptContent(contentToCopy, enteredPassword);
             if (!decrypted) {
                 alert('❌ Failed to decrypt content!');
                 return;
@@ -268,10 +383,59 @@ function copyToClipboard(id, button) {
     });
 }
 
+// Download file function (for images and PDFs)
+function downloadFile(id) {
+    const snippet = codeSnippets.find(s => s.id == id);
+    
+    if (!snippet) {
+        alert('❌ Snippet not found!');
+        return;
+    }
+    
+    let fileContent = snippet.content || snippet.code || '';
+    
+    // Check if snippet is encrypted and needs decryption
+    if (snippet.isEncrypted) {
+        // Check if already decrypted in cache
+        if (decryptedContent.has(id)) {
+            fileContent = decryptedContent.get(id);
+        } else {
+            // Need password to decrypt
+            const enteredPassword = prompt('🔒 Enter password to download:');
+            
+            if (enteredPassword === null) {
+                return; // User cancelled
+            }
+            
+            if (enteredPassword !== snippet.password) {
+                alert('❌ Incorrect password! Cannot download file.');
+                return;
+            }
+            
+            // Try to decrypt
+            const decrypted = decryptContent(fileContent, enteredPassword);
+            if (!decrypted) {
+                alert('❌ Failed to decrypt file!');
+                return;
+            }
+            
+            fileContent = decrypted;
+        }
+    }
+    
+    // Create download link
+    const link = document.createElement('a');
+    link.href = fileContent;
+    link.download = snippet.fileName || `file-${snippet.id}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
 // Render code list
 function renderCodeList() {
     if (codeSnippets.length === 0) {
-        codeList.innerHTML = '<div class="empty-state">No code snippets yet. Add your first snippet above!</div>';
+        codeList.innerHTML = '<div class="empty-state">No snippets yet. Add your first snippet above!</div>';
         return;
     }
     
@@ -292,6 +456,10 @@ function renderCodeList() {
     }
     
     codeList.innerHTML = filteredSnippets.map(snippet => {
+        // Support both old 'code' and new 'content' properties
+        const contentType = snippet.contentType || 'text';
+        const rawContent = snippet.content || snippet.code || '';
+        
         // Highlight search term in title
         const highlightedTitle = searchQuery === ''
             ? escapeHtml(snippet.title)
@@ -299,44 +467,99 @@ function renderCodeList() {
         
         // Determine if content should be protected
         const isProtected = snippet.hidden && !unlockedSnippets.has(snippet.id);
-        const contentClass = isProtected ? 'code-content protected' : 'code-content';
         
         // Get the display content (decrypted if unlocked, encrypted if locked)
-        let displayContent = snippet.code;
+        let displayContent = rawContent;
         if (snippet.isEncrypted && unlockedSnippets.has(snippet.id)) {
-            // Show decrypted content if unlocked
-            displayContent = decryptedContent.get(snippet.id) || snippet.code;
+            displayContent = decryptedContent.get(snippet.id) || rawContent;
         }
         
-        // Create eye button for hidden content (both locked and unlocked)
+        // Render content based on type
+        let contentHtml = '';
+        const contentClass = isProtected ? 'snippet-content protected' : 'snippet-content';
+        
+        if (contentType === 'image') {
+            if (isProtected) {
+                contentHtml = `<div class="${contentClass}">🔒 Image is hidden</div>`;
+            } else {
+                contentHtml = `<div class="${contentClass}">
+                    <img src="${displayContent}" alt="${escapeHtml(snippet.fileName || 'Image')}" style="max-width: 100%; border-radius: 8px;">
+                    ${snippet.fileName ? `<p class="file-name">📷 ${escapeHtml(snippet.fileName)}</p>` : ''}
+                </div>`;
+            }
+        } else if (contentType === 'pdf') {
+            if (isProtected) {
+                contentHtml = `<div class="${contentClass}">🔒 PDF is hidden</div>`;
+            } else {
+                contentHtml = `<div class="${contentClass}">
+                    <div class="pdf-container">
+                        <embed src="${displayContent}" type="application/pdf" width="100%" height="400px" />
+                        <p class="file-name">📄 ${escapeHtml(snippet.fileName || 'Document.pdf')}</p>
+                    </div>
+                </div>`;
+            }
+        } else {
+            // Text/code content
+            contentHtml = `<div class="${contentClass}">${escapeHtml(displayContent)}</div>`;
+        }
+        
+        // Create eye button for hidden content
         let eyeButton = '';
         if (snippet.hidden) {
             if (isProtected) {
-                // Locked - show closed eye
                 eyeButton = `<button class="eye-unlock-btn" data-action="unlock" data-id="${snippet.id}">
-                    <span class="eye-text">Unlock</span>
+                    <span class="eye-text">🔓 Unlock</span>
                 </button>`;
             } else {
-                // Unlocked - show open eye to hide again
                 eyeButton = `<button class="eye-unlock-btn" data-action="lock" data-id="${snippet.id}">
-                    <span class="eye-text">Hide</span>
+                    <span class="eye-text">🔒 Hide</span>
                 </button>`;
             }
         }
         
+        // Content type badge
+        let typeBadge = '';
+        if (contentType === 'image') {
+            typeBadge = '<span class="type-badge">🖼️ Image</span>';
+        } else if (contentType === 'pdf') {
+            typeBadge = '<span class="type-badge">📄 PDF</span>';
+        } else {
+            typeBadge = '<span class="type-badge">📝 Text</span>';
+        }
+        
+        // Action buttons
+        let actionButtons = '';
+        if (contentType === 'text') {
+            actionButtons = `<button class="btn btn-copy" data-action="copy" data-id="${snippet.id}">
+                📋 Copy
+            </button>`;
+        } else {
+            actionButtons = `<button class="btn btn-download" data-action="download" data-id="${snippet.id}">
+                💾 Download
+            </button>`;
+        }
+        
         return `
             <div class="code-item" data-snippet-id="${snippet.id}">
-                <div class="code-title">${highlightedTitle}</div>
+                <div class="snippet-header">
+                    <div class="code-title">${highlightedTitle}</div>
+                    ${typeBadge}
+                </div>
                 <div class="timestamp">Added: ${snippet.timestamp}</div>
                 <div class="code-content-wrapper">
                     ${eyeButton}
-                    <div class="${contentClass}">${escapeHtml(displayContent)}</div>
+                    ${contentHtml}
                 </div>
                 <div class="code-actions">
-                    <button class="btn btn-copy" data-action="copy" data-id="${snippet.id}">
-                        📋 Copy to Clipboard
-                    </button>
+                    ${actionButtons}
                     <button class="btn btn-delete" data-action="delete" data-id="${snippet.id}">
+                        🗑️ Delete
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}>
                         🗑️ Delete
                     </button>
                 </div>
@@ -367,6 +590,10 @@ codeList.addEventListener('click', async function(e) {
     } else if (action === 'copy') {
         if (snippet) {
             copyToClipboard(snippet.id, button);
+        }
+    } else if (action === 'download') {
+        if (snippet) {
+            downloadFile(snippet.id);
         }
     } else if (action === 'unlock') {
         unlockContent(snippet ? snippet.id : idNum);
@@ -403,20 +630,26 @@ function escapeForJS(text) {
 
 // Unlock content (called when clicking on protected content)
 function unlockContent(id) {
-    const snippet = codeSnippets.find(s => s.id === id);
+    const snippet = codeSnippets.find(s => s.id == id);
     if (!snippet) return;
     
-    const enteredPassword = prompt('Enter password to view content:');
+    const enteredPassword = prompt('🔒 Enter password to view content:');
     
     if (enteredPassword === null) {
         return; // User cancelled
     }
     
+    if (enteredPassword !== snippet.password) {
+        alert('❌ Incorrect password! Content remains hidden.');
+        return;
+    }
+    
     // Try to decrypt the content
     if (snippet.isEncrypted) {
-        const decrypted = decryptContent(snippet.code, enteredPassword);
+        const rawContent = snippet.content || snippet.code || '';
+        const decrypted = decryptContent(rawContent, enteredPassword);
         if (!decrypted) {
-            alert('Incorrect password! Content remains hidden.');
+            alert('❌ Failed to decrypt! Content remains hidden.');
             return;
         }
         // Cache the decrypted content

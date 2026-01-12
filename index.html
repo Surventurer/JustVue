@@ -16,8 +16,33 @@
         
         <div class="input-section">
             <input type="password" id="passwordInput" placeholder="Enter password...">
-            <input type="text" id="titleInput" placeholder="Enter a title for your code...">
-            <textarea id="codeInput" placeholder="Enter your code here..."></textarea>
+            <input type="text" id="titleInput" placeholder="Enter a title...">
+            
+            <div class="content-type-selector">
+                <label class="type-option">
+                    <input type="radio" name="contentType" value="text" checked>
+                    <span>📝 Text/Code</span>
+                </label>
+                <label class="type-option">
+                    <input type="radio" name="contentType" value="image">
+                    <span>🖼️ Image</span>
+                </label>
+                <label class="type-option">
+                    <input type="radio" name="contentType" value="pdf">
+                    <span>📄 PDF</span>
+                </label>
+            </div>
+            
+            <textarea id="codeInput" placeholder="Enter your text/code here..."></textarea>
+            
+            <div id="fileUploadArea" style="display:none;">
+                <input type="file" id="fileInput" accept="image/*,.pdf" style="display:none;">
+                <button type="button" id="fileSelectBtn" class="btn btn-file-select">
+                    📁 Choose File
+                </button>
+                <div id="filePreview" style="display:none;"></div>
+            </div>
+            
             <div class="hide-content-section">
                 <label class="toggle-container">
                     <input type="checkbox" id="hideContentToggle">
@@ -25,7 +50,7 @@
                     <span class="toggle-label">🔒 Hide This Content</span>
                 </label>
             </div>
-            <button id="addBtn" class="btn btn-add">Add Code</button>
+            <button id="addBtn" class="btn btn-add">Add Snippet</button>
         </div>
 
         <div class="code-list" id="codeList">
