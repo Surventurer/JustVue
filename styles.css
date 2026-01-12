@@ -677,24 +677,21 @@ h1 {
 }
 
 .snippet-content.protected {
-    background: #3a3a3a;
-    color: white;
+    background: #1a1a1a;
+    color: #ddd;
     text-align: center;
     font-weight: bold;
     padding: 60px 20px;
     font-family: 'Segoe UI', sans-serif;
     min-height: 150px;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     font-size: 16px;
-    filter: blur(15px);
+    filter: blur(10px);
     user-select: none;
     pointer-events: none;
-}
-
-.snippet-content.protected img {
-    filter: blur(15px);
 }
 
 .snippet-content img {

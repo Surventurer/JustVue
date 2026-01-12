@@ -485,7 +485,8 @@ function renderCodeList() {
         if (contentType === 'image') {
             if (isProtected) {
                 contentHtml = `<div class="snippet-content protected">
-                    <img src="${rawContent}" alt="Hidden" style="max-width: 100%; border-radius: 8px;">
+                    <div style="font-size: 48px; margin-bottom: 10px;">🖼️</div>
+                    <div>🔒 Image is hidden</div>
                 </div>`;
             } else {
                 contentHtml = `<div class="snippet-content">
@@ -495,7 +496,10 @@ function renderCodeList() {
             }
         } else if (contentType === 'pdf') {
             if (isProtected) {
-                contentHtml = `<div class="snippet-content protected">🔒 PDF is hidden</div>`;
+                contentHtml = `<div class="snippet-content protected">
+                    <div style="font-size: 48px; margin-bottom: 10px;">📄</div>
+                    <div>🔒 PDF is hidden</div>
+                </div>`;
             } else {
                 contentHtml = `<div class="snippet-content">
                     <div class="pdf-container">
