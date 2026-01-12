@@ -676,6 +676,12 @@ h1 {
     overflow-y: auto;
 }
 
+.snippet-content:has(.pdf-container),
+.snippet-content:has(img) {
+    padding: 0;
+    background: transparent;
+}
+
 .snippet-content.protected {
     background: #1a1a1a;
     color: #ddd;
@@ -704,18 +710,24 @@ h1 {
 .pdf-container {
     width: 100%;
     min-height: 400px;
+    margin: 0;
+    padding: 0;
 }
 
 .pdf-container embed {
     border-radius: 8px;
     border: 1px solid #ddd;
+    display: block;
 }
 
 .file-name {
-    margin-top: 10px;
+    margin: 10px 0 0 0;
+    padding: 10px 15px;
     color: #666;
     font-size: 14px;
     font-family: 'Segoe UI', sans-serif;
+    background: #f8f9fa;
+    border-radius: 0 0 8px 8px;
 }
 
 .btn-download {
