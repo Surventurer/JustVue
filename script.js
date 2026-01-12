@@ -504,7 +504,11 @@ function renderCodeList() {
             }
         } else {
             // Text/code content
-            contentHtml = `<div class="${contentClass}">${escapeHtml(displayContent)}</div>`;
+            if (isProtected) {
+                contentHtml = `<div class="code-content protected">🔒 Content is hidden</div>`;
+            } else {
+                contentHtml = `<div class="code-content">${escapeHtml(displayContent)}</div>`;
+            }
         }
         
         // Create eye button for hidden content
