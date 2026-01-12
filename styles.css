@@ -225,8 +225,8 @@ h1 {
 }
 
 .code-content {
-    background: #f8f9fa;
-    color: #333;
+    background: #333;
+    color: #f8f9fa;
     padding: 15px;
     border-radius: 6px;
     font-family: 'Courier New', monospace;
