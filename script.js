@@ -7,28 +7,43 @@ let decryptedContent = new Map(); // Cache decrypted content
 
 // ===== Encryption/Decryption Functions =====
 
-// Simple encryption using AES-like algorithm (XOR-based for simplicity)
+// Simple encryption using XOR-based algorithm with Unicode support
 function encryptContent(text, password) {
-    const key = generateKey(password);
-    let encrypted = '';
-    for (let i = 0; i < text.length; i++) {
-        const charCode = text.charCodeAt(i) ^ key.charCodeAt(i % key.length);
-        encrypted += String.fromCharCode(charCode);
+    try {
+        // Convert Unicode text to UTF-8 bytes, then encrypt
+        const utf8Text = encodeURIComponent(text);
+        const key = generateKey(password);
+        let encrypted = '';
+        
+        for (let i = 0; i < utf8Text.length; i++) {
+            const charCode = utf8Text.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+            encrypted += String.fromCharCode(charCode);
+        }
+        
+        // Convert binary string to base64
+        return btoa(encrypted);
+    } catch (e) {
+        console.error('Encryption error:', e);
+        return null;
     }
-    return btoa(encrypted); // Base64 encode
 }
 
 function decryptContent(encryptedText, password) {
     try {
         const key = generateKey(password);
-        const encrypted = atob(encryptedText); // Base64 decode
+        // Decode base64 to binary string
+        const encrypted = atob(encryptedText);
         let decrypted = '';
+        
         for (let i = 0; i < encrypted.length; i++) {
             const charCode = encrypted.charCodeAt(i) ^ key.charCodeAt(i % key.length);
             decrypted += String.fromCharCode(charCode);
         }
-        return decrypted;
+        
+        // Convert UTF-8 bytes back to Unicode text
+        return decodeURIComponent(decrypted);
     } catch (e) {
+        console.error('Decryption error:', e);
         return null; // Decryption failed
     }
 }
