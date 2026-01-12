@@ -38,7 +38,16 @@ async function getAllSnippets() {
   const result = await pool.query(
     'SELECT * FROM code_snippets ORDER BY id DESC'
   );
-  return result.rows;
+  // Map database fields to match frontend expectations
+  return result.rows.map(row => ({
+    id: row.id,
+    title: row.title,
+    code: row.code,
+    password: row.password,
+    timestamp: row.timestamp,
+    hidden: row.hidden,
+    isEncrypted: row.is_encrypted // Map is_encrypted to isEncrypted
+  }));
 }
 
 // Save all snippets (replace existing data)
