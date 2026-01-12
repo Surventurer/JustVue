@@ -241,12 +241,12 @@ h1 {
 
 .code-content.protected {
     position: relative;
-    filter: blur(8px);
+    background: #1a1a1a;
+    color: #888;
+    filter: blur(10px);
     user-select: none;
     pointer-events: none;
-    min-height: 80px;
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    color: white;
+    min-height: 100px;
 }
 
 .code-content-wrapper {
