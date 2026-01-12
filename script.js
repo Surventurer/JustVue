@@ -129,14 +129,18 @@ function clearFileSelection() {
 }
 
 function updateInputVisibility() {
+    console.log('Updating visibility, selectedContentType:', selectedContentType);
+    
     if (selectedContentType === 'text') {
         codeInput.style.display = 'block';
         fileUploadArea.style.display = 'none';
         clearFileSelection();
+        console.log('Showing text area, hiding file upload');
     } else {
         codeInput.style.display = 'none';
         fileUploadArea.style.display = 'block';
         fileInput.accept = selectedContentType === 'image' ? 'image/*' : '.pdf';
+        console.log('Hiding text area, showing file upload');
     }
 }
 
@@ -553,13 +557,6 @@ function renderCodeList() {
                 <div class="code-actions">
                     ${actionButtons}
                     <button class="btn btn-delete" data-action="delete" data-id="${snippet.id}">
-                        🗑️ Delete
-                    </button>
-                </div>
-            </div>
-        `;
-    }).join('');
-}>
                         🗑️ Delete
                     </button>
                 </div>
