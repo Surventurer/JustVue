@@ -1,16 +1,30 @@
 const { Pool } = require('pg');
 
+// Validate required environment variables
+const requiredEnvVars = ['DB_USER', 'DB_PASSWORD', 'DB_HOST', 'DB_PORT', 'DB_NAME'];
+const missingVars = requiredEnvVars.filter(v => !process.env[v]);
+
+if (missingVars.length > 0) {
+  console.error('Missing required environment variables:', missingVars.join(', '));
+}
+
 // Aiven PostgreSQL configuration - all values from environment variables
 const config = {
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT, 10),
+  port: parseInt(process.env.DB_PORT || '5432', 10),
   database: process.env.DB_NAME,
-  ssl: {
-    rejectUnauthorized: true,
-    ca: process.env.DB_CA_CERT,
-  },
+  ssl: process.env.DB_CA_CERT 
+    ? {
+        rejectUnauthorized: true,
+        ca: process.env.DB_CA_CERT.replace(/\\n/g, '\n'), // Handle escaped newlines
+      }
+    : {
+        rejectUnauthorized: false, // Fallback for services that don't need explicit CA
+      },
+  connectionTimeoutMillis: 10000, // 10 second timeout
+  idleTimeoutMillis: 30000,
 };
 
 // Log config for debugging (without sensitive data)
@@ -19,7 +33,8 @@ console.log('DB Config:', {
   host: config.host,
   port: config.port,
   database: config.database,
-  hasCert: !!config.ssl.ca
+  hasCert: !!process.env.DB_CA_CERT,
+  sslMode: process.env.DB_CA_CERT ? 'verify-ca' : 'require'
 });
 
 // Create a connection pool
@@ -28,6 +43,11 @@ let pool;
 function getPool() {
   if (!pool) {
     pool = new Pool(config);
+    
+    // Handle pool errors
+    pool.on('error', (err) => {
+      console.error('Unexpected pool error:', err);
+    });
   }
   return pool;
 }

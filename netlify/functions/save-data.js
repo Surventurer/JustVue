@@ -1,6 +1,9 @@
 const { saveAllSnippets } = require('./db');
 
 exports.handler = async function(event, context) {
+  // Prevent function from waiting for empty event loop
+  context.callbackWaitsForEmptyEventLoop = false;
+  
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
