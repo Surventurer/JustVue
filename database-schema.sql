@@ -1,5 +1,5 @@
 -- JustVue Database Schema
--- Run this SQL in your PostgreSQL database (Supabase, Neon, etc.)
+-- Run this SQL in your PostgreSQL database
 
 CREATE TABLE IF NOT EXISTS code_snippets (
     id BIGINT PRIMARY KEY,
