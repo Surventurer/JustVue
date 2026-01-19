@@ -5,6 +5,10 @@ let codeSnippets = [];
 let unlockedSnippets = new Set(); // Track which snippets are unlocked in this session
 let decryptedContent = new Map(); // Cache decrypted content
 
+// Auto-update variables
+let autoUpdateInterval = null;
+let lastUpdateHash = null;
+
 // ===== Encryption/Decryption Functions =====
 
 // Simple encryption using XOR-based algorithm with Unicode support
@@ -146,6 +150,11 @@ addBtn.addEventListener('click', addCode);
 
 // Add event listener for search input
 searchInput.addEventListener('input', renderCodeList);
+
+// Pause auto-update when user is typing
+[passwordInput, titleInput, codeInput].forEach(input => {
+    input.addEventListener('input', pauseAutoUpdateTemporarily);
+});
 
 // Add event listener for Enter key in password (Enter to focus on title)
 passwordInput.addEventListener('keydown', (e) => {
@@ -732,4 +741,191 @@ async function loadFromDatabaseJSON() {
 async function initializeApp() {
     await loadFromDatabaseJSON();
     renderCodeList();
+    startAutoUpdate();
 }
+
+// ===== Auto-Update Functions =====
+
+// Generate a simple hash from snippets for change detection
+function generateDataHash(snippets) {
+    const str = JSON.stringify(snippets.map(s => ({ id: s.id, title: s.title, timestamp: s.timestamp })));
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash;
+}
+
+// Check for updates from server
+async function checkForUpdates() {
+    try {
+        const response = await fetch('/.netlify/functions/get-data');
+        
+        if (response.ok) {
+            const data = await response.json();
+            
+            if (Array.isArray(data)) {
+                // Normalize IDs to numbers
+                const normalizedData = data.map(snippet => ({
+                    ...snippet,
+                    id: typeof snippet.id === 'string' ? parseInt(snippet.id, 10) : snippet.id
+                }));
+                
+                // Calculate hash of new data
+                const newHash = generateDataHash(normalizedData);
+                
+                // Check if data has changed
+                if (lastUpdateHash !== null && newHash !== lastUpdateHash) {
+                    // Data has changed - update the UI
+                    const oldLength = codeSnippets.length;
+                    const change = normalizedData.length - oldLength;
+                    
+                    codeSnippets = normalizedData;
+                    lastUpdateHash = newHash;
+                    renderCodeList();
+                    
+                    // Show notification only if there's a meaningful change
+                    if (change !== 0) {
+                        showUpdateNotification(change);
+                    }
+                } else if (lastUpdateHash === null) {
+                    // First check, just store the hash
+                    lastUpdateHash = newHash;
+                }
+            }
+        }
+    } catch (error) {
+        // Silently fail - don't disrupt user experience
+        console.error('Auto-update check failed:', error);
+    }
+}
+
+// Show a subtle notification when data updates
+function showUpdateNotification(change) {
+    const notificationDiv = document.createElement('div');
+    notificationDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        animation: slideIn 0.3s ease-out;
+    `;
+    
+    let message = '🔄 Data updated';
+    if (change > 0) {
+        message += ` (+${change} new)`;
+    } else if (change < 0) {
+        message += ` (${Math.abs(change)} removed)`;
+    }
+    
+    notificationDiv.textContent = message;
+    document.body.appendChild(notificationDiv);
+    
+    // Add slide-in animation
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    setTimeout(() => {
+        notificationDiv.style.opacity = '0';
+        notificationDiv.style.transform = 'translateX(400px)';
+        notificationDiv.style.transition = 'all 0.3s ease-out';
+        setTimeout(() => {
+            notificationDiv.remove();
+            style.remove();
+        }, 300);
+    }, 3000);
+}
+
+// Start automatic updates
+function startAutoUpdate(intervalMs = 5000) {
+    // Clear any existing interval
+    if (autoUpdateInterval) {
+        clearInterval(autoUpdateInterval);
+    }
+    
+    // Set initial hash
+    lastUpdateHash = generateDataHash(codeSnippets);
+    
+    // Start checking for updates every intervalMs (default: 5 seconds)
+    autoUpdateInterval = setInterval(checkForUpdates, intervalMs);
+    
+    // Update indicator
+    updateIndicatorStatus(true);
+    
+    console.log(`Auto-update started (checking every ${intervalMs / 1000}s)`);
+}
+
+// Stop automatic updates (useful for testing or manual control)
+function stopAutoUpdate() {
+    if (autoUpdateInterval) {
+        clearInterval(autoUpdateInterval);
+        autoUpdateInterval = null;
+        
+        // Update indicator
+        updateIndicatorStatus(false);
+        
+        console.log('Auto-update stopped');
+    }
+}
+
+// Update the indicator status
+function updateIndicatorStatus(isActive) {
+    const indicator = document.getElementById('autoUpdateIndicator');
+    if (!indicator) return;
+    
+    const dot = indicator.querySelector('.pulse-dot');
+    const text = indicator.querySelector('.indicator-text');
+    
+    if (isActive) {
+        dot.style.background = '#4CAF50';
+        text.textContent = 'Live';
+        indicator.title = 'Auto-update is active';
+    } else {
+        dot.style.background = '#FF9800';
+        text.textContent = 'Paused';
+        indicator.title = 'Auto-update is paused';
+    }
+}
+
+// Pause auto-update when user is actively editing
+let userActivityTimeout = null;
+function pauseAutoUpdateTemporarily() {
+    stopAutoUpdate();
+    clearTimeout(userActivityTimeout);
+    userActivityTimeout = setTimeout(() => {
+        startAutoUpdate();
+    }, 10000); // Resume after 10 seconds of inactivity
+}
+
+// Make functions available globally for manual control via console
+window.codeManagerControls = {
+    startAutoUpdate,
+    stopAutoUpdate,
+    checkForUpdates,
+    getCurrentInterval: () => autoUpdateInterval ? 'Active' : 'Paused',
+    setUpdateInterval: (seconds) => {
+        stopAutoUpdate();
+        startAutoUpdate(seconds * 1000);
+    }
+};

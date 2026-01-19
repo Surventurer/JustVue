@@ -9,7 +9,18 @@ A simple, elegant web application to manage your code snippets. Add, search, del
 - 📋 **Copy to Clipboard** - One-click copying of code
 - 🗑️ **Delete** - Remove snippets you no longer need
 - 💾 **Auto-Save** - All snippets are saved in your browser's local storage
+- 🔄 **Live Updates** - Automatic data synchronization without page refresh
 - 🎨 **Beautiful UI** - Modern, responsive design with smooth animations
+
+## Live Updates
+
+The application now features **automatic data synchronization**:
+
+- 🔄 **Real-time Sync** - Data updates every 5 seconds without manual refresh
+- 🟢 **Live Indicator** - Visual indicator shows sync status in the top-right corner
+- ⏸️ **Smart Pausing** - Auto-update pauses while you're typing to prevent interruptions
+- 🔔 **Update Notifications** - Subtle notifications when new data is detected
+- 🔁 **Auto-Resume** - Sync automatically resumes 10 seconds after you stop typing
 
 ## Usage
 
