@@ -1,4 +1,4 @@
--- Code Manager Database Schema
+-- JustVue Database Schema
 -- Run this SQL in your PostgreSQL database (Supabase, Neon, etc.)
 
 CREATE TABLE IF NOT EXISTS code_snippets (

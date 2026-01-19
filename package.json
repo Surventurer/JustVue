@@ -1,7 +1,7 @@
 {
-  "name": "code-manager",
+  "name": "justvue",
   "version": "1.0.0",
-  "description": "Code snippet manager with PostgreSQL storage",
+  "description": "JustVue - snippet manager with PostgreSQL storage",
   "main": "index.html",
   "scripts": {
     "start": "echo 'Open index.html in your browser'",
@@ -12,7 +12,7 @@
     "url": "https://github.com/Surventurer/Code_Manager.git"
   },
   "keywords": [
-    "code-manager",
+    "justvue",
     "snippets",
     "postgresql",
     "netlify"
