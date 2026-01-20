@@ -670,12 +670,10 @@ function renderCodeList() {
                     ${snippet.fileName ? `<p class="file-name">📷 ${escapeHtml(snippet.fileName)}</p>` : ''}
                 </div>`;
             } else if (hasStoragePath && !snippet.fileUrl) {
-                // File stored in Supabase Storage - needs to load URL
-                contentHtml = `<div class="snippet-content" data-snippet-id="${snippet.id}">
+                // File stored in Supabase Storage - auto-load for non-encrypted, show loading
+                contentHtml = `<div class="snippet-content" data-snippet-id="${snippet.id}" data-auto-load="true">
                     <div style="font-size: 48px; margin-bottom: 10px;">🖼️</div>
-                    <button class="btn btn-load" data-action="load-file" data-id="${snippet.id}">
-                        📥 Load Image
-                    </button>
+                    <div class="loading-text">⏳ Loading image...</div>
                     ${snippet.fileName ? `<p class="file-name">📷 ${escapeHtml(snippet.fileName)}</p>` : ''}
                 </div>`;
             } else {
@@ -699,12 +697,10 @@ function renderCodeList() {
                     </div>
                 </div>`;
             } else if (hasStoragePath && !snippet.fileUrl) {
-                // File stored in Supabase Storage - needs to load URL
-                contentHtml = `<div class="snippet-content" data-snippet-id="${snippet.id}">
+                // File stored in Supabase Storage - auto-load for non-encrypted, show loading
+                contentHtml = `<div class="snippet-content" data-snippet-id="${snippet.id}" data-auto-load="true">
                     <div style="font-size: 48px; margin-bottom: 10px;">📄</div>
-                    <button class="btn btn-load" data-action="load-file" data-id="${snippet.id}">
-                        📥 Load PDF
-                    </button>
+                    <div class="loading-text">⏳ Loading PDF...</div>
                     <p class="file-name">📄 ${escapeHtml(snippet.fileName || 'Document.pdf')}</p>
                 </div>`;
             } else {
@@ -780,6 +776,24 @@ function renderCodeList() {
             </div>
         `;
     }).join('');
+    
+    // Auto-load files that need URLs (non-encrypted files in storage)
+    autoLoadFiles();
+}
+
+// Auto-load file URLs for non-encrypted files
+async function autoLoadFiles() {
+    const autoLoadElements = document.querySelectorAll('[data-auto-load="true"]');
+    
+    for (const element of autoLoadElements) {
+        const snippetId = parseInt(element.dataset.snippetId, 10);
+        const snippet = codeSnippets.find(s => s.id === snippetId || s.id == snippetId);
+        
+        if (snippet && !snippet.fileUrl) {
+            // Load the URL in background
+            loadFileUrl(snippetId);
+        }
+    }
 }
 
 // Event delegation for buttons
@@ -809,11 +823,6 @@ codeList.addEventListener('click', async function(e) {
         unlockContent(snippet ? snippet.id : idNum);
     } else if (action === 'lock') {
         lockContent(snippet ? snippet.id : idNum);
-    } else if (action === 'load-file') {
-        // Load file URL from Supabase Storage
-        button.textContent = '⏳ Loading...';
-        button.disabled = true;
-        await loadFileUrl(snippet ? snippet.id : idNum);
     }
 });
 
