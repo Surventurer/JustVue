@@ -545,7 +545,7 @@ async function downloadFile(id) {
         }
     }
     
-    // If file is in Supabase Storage, get signed URL
+    // If file is in Supabase Storage, get signed URL and download
     if (snippet.storagePath) {
         try {
             const response = await fetch(`/.netlify/functions/get-data?id=${id}&getUrl=true`);
@@ -553,12 +553,21 @@ async function downloadFile(id) {
             
             const data = await response.json();
             if (data.fileUrl) {
-                // Open URL in new tab (browser will download)
-                window.open(data.fileUrl, '_blank');
+                // Fetch the file and trigger download
+                const fileResponse = await fetch(data.fileUrl);
+                const blob = await fileResponse.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = snippet.fileName || `file-${snippet.id}`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
                 return;
             }
         } catch (error) {
-            alert('❌ Failed to get download URL. Please try again.');
+            alert('❌ Failed to download file. Please try again.');
             return;
         }
     }
