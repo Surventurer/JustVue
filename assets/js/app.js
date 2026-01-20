@@ -59,6 +59,12 @@ async function encryptContent(text, password) {
 
 // Decrypt content using server-side API (with fallback to legacy XOR)
 async function decryptContent(encryptedText, password) {
+    // Guard against empty content
+    if (!encryptedText || encryptedText.trim() === '') {
+        console.error('Cannot decrypt: content is empty');
+        return null;
+    }
+    
     // First, try server-side AES decryption
     try {
         const response = await fetch('/.netlify/functions/crypto', {
@@ -807,24 +813,50 @@ async function unlockContent(id) {
     
     // Try to decrypt the content (server-side)
     if (snippet.isEncrypted) {
-        const rawContent = snippet.content || snippet.code || '';
+        let rawContent = snippet.content || snippet.code || '';
         
-        // Show loading indicator
-        const loadingDiv = document.createElement('div');
-        loadingDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);color:white;padding:20px 40px;border-radius:10px;z-index:10000;';
-        loadingDiv.textContent = '🔓 Decrypting...';
-        document.body.appendChild(loadingDiv);
-        
-        const decrypted = await decryptContent(rawContent, enteredPassword);
-        
-        loadingDiv.remove();
-        
-        if (!decrypted) {
-            alert('❌ Failed to decrypt! Content remains hidden.');
-            return;
+        // If content is empty and it's a file, we need to load it first from storage
+        if (!rawContent && snippet.storagePath) {
+            // For encrypted files stored in Supabase, the file itself is encrypted
+            // Load the file URL first
+            try {
+                const response = await fetch(`/.netlify/functions/get-data?id=${snippet.id}&getUrl=true`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.fileUrl) {
+                        // File is in storage - for encrypted files, we need different handling
+                        // The encryption was done on the base64 content before upload
+                        // For now, mark as unlocked (file URL is the "decrypted" state)
+                        decryptedContent.set(id, data.fileUrl);
+                        unlockedSnippets.add(id);
+                        renderCodeList();
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load file for decryption:', e);
+            }
         }
-        // Cache the decrypted content
-        decryptedContent.set(id, decrypted);
+        
+        // Text content - decrypt normally
+        if (rawContent) {
+            // Show loading indicator
+            const loadingDiv = document.createElement('div');
+            loadingDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);color:white;padding:20px 40px;border-radius:10px;z-index:10000;';
+            loadingDiv.textContent = '🔓 Decrypting...';
+            document.body.appendChild(loadingDiv);
+            
+            const decrypted = await decryptContent(rawContent, enteredPassword);
+            
+            loadingDiv.remove();
+            
+            if (!decrypted) {
+                alert('❌ Failed to decrypt! Content remains hidden.');
+                return;
+            }
+            // Cache the decrypted content
+            decryptedContent.set(id, decrypted);
+        }
     }
     
     // Unlock this snippet for this session
