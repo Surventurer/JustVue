@@ -12,6 +12,11 @@ let lastUpdateHash = null;
 // Dialog state - pause loading when dialog is open
 let isDialogOpen = false;
 
+// Track expanded/viewing state to prevent refresh disruption
+let expandedSnippets = new Set(); // Snippets currently being viewed/expanded
+let isUserViewingPreview = false; // Flag to prevent auto-refresh while viewing
+let pendingRefresh = false; // Queue refresh for when user finishes viewing
+
 // Supabase client for direct uploads (initialized on first use)
 let supabaseClient = null;
 let supabaseConfig = null;
@@ -379,6 +384,8 @@ async function addCode() {
                 // Reset form
                 resetForm();
                 renderCodeList();
+                // Scroll to top to show new snippet
+                window.scrollTo({ top: 0, behavior: 'smooth' });
                 return;
                 
             } catch (error) {
@@ -469,6 +476,8 @@ async function addCode() {
     // Reset form
     resetForm();
     renderCodeList();
+    // Scroll to top to show new snippet
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // Reset form helper
@@ -1029,6 +1038,10 @@ codeList.addEventListener('click', async function(e) {
 
 // Load file URL from Supabase Storage
 async function loadFileUrl(snippetId) {
+    // Mark as viewing when loading a file
+    expandedSnippets.add(snippetId);
+    isUserViewingPreview = true;
+    
     try {
         const response = await fetch(`/.netlify/functions/get-data?id=${snippetId}&getUrl=true`);
         if (!response.ok) {
@@ -1041,13 +1054,61 @@ async function loadFileUrl(snippetId) {
         const index = codeSnippets.findIndex(s => s.id === snippetId);
         if (index !== -1 && data.fileUrl) {
             codeSnippets[index].fileUrl = data.fileUrl;
-            renderCodeList();
+            
+            // Only update the specific element instead of full re-render
+            updateSnippetPreview(snippetId, data.fileUrl);
         }
     } catch (error) {
         console.error('Failed to load file URL:', error);
-        showAlert('❌ Failed to load file. Please try again.');
-        renderCodeList(); // Re-render to reset button
+        // Update just the loading element to show error
+        const element = document.querySelector(`[data-snippet-id="${snippetId}"][data-auto-load="true"]`);
+        if (element) {
+            element.innerHTML = `<div style="color: #e74c3c;">❌ Failed to load. <button onclick="loadFileUrl(${snippetId})" class="btn" style="font-size:12px;padding:5px 10px;">Retry</button></div>`;
+        }
     }
+}
+
+// Update just the specific snippet's preview without full re-render
+function updateSnippetPreview(snippetId, fileUrl) {
+    const snippet = codeSnippets.find(s => s.id == snippetId);
+    if (!snippet) return;
+    
+    const element = document.querySelector(`[data-snippet-id="${snippetId}"][data-auto-load="true"]`);
+    if (!element) return;
+    
+    // Remove auto-load attribute
+    element.removeAttribute('data-auto-load');
+    
+    const contentType = snippet.contentType || 'text';
+    const fileName = snippet.fileName || 'file';
+    
+    if (contentType === 'image') {
+        element.innerHTML = `
+            <img src="${fileUrl}" alt="${escapeHtml(fileName)}" style="max-width: 100%; border-radius: 8px;">
+            <p class="file-name">📷 ${escapeHtml(fileName)}</p>
+        `;
+    } else if (contentType === 'pdf') {
+        element.innerHTML = `
+            <div class="pdf-container">
+                <iframe src="${fileUrl}" width="100%" height="400px" style="border: none; border-radius: 8px;"></iframe>
+                <p class="file-name">📄 ${escapeHtml(fileName)}</p>
+            </div>
+        `;
+    }
+    
+    // Mark viewing complete after a short delay (let user see the content)
+    setTimeout(() => {
+        expandedSnippets.delete(snippetId);
+        if (expandedSnippets.size === 0) {
+            isUserViewingPreview = false;
+            // Process pending refresh if any
+            if (pendingRefresh) {
+                pendingRefresh = false;
+                console.log('Processing pending refresh');
+                checkForUpdates();
+            }
+        }
+    }, 2000); // Give user 2 seconds after load before allowing refresh
 }
 
 // Highlight matching text in search results
@@ -1141,6 +1202,8 @@ async function unlockContent(id) {
                 // Cache the decrypted content (this is now base64 of the original file)
                 decryptedContent.set(id, decrypted);
                 unlockedSnippets.add(id);
+                expandedSnippets.add(id); // Track as viewing
+                isUserViewingPreview = true;
                 renderCodeList();
                 return;
             } catch (e) {
@@ -1174,7 +1237,22 @@ async function unlockContent(id) {
     
     // Unlock this snippet for this session
     unlockedSnippets.add(id);
+    expandedSnippets.add(id); // Track as viewing
+    isUserViewingPreview = true;
     renderCodeList();
+    
+    // Clear viewing state after user has seen content (30 seconds)
+    setTimeout(() => {
+        expandedSnippets.delete(id);
+        if (expandedSnippets.size === 0 && unlockedSnippets.size === 0) {
+            isUserViewingPreview = false;
+            // Process pending refresh if any
+            if (pendingRefresh) {
+                pendingRefresh = false;
+                checkForUpdates();
+            }
+        }
+    }, 30000);
 }
 
 // Lock content (hide again)
@@ -1183,6 +1261,11 @@ function lockContent(id) {
     unlockedSnippets.delete(id);
     // Clear decrypted cache
     decryptedContent.delete(id);
+    // Clear from expanded/viewing
+    expandedSnippets.delete(id);
+    if (expandedSnippets.size === 0) {
+        isUserViewingPreview = false;
+    }
     renderCodeList();
 }
 
@@ -1295,6 +1378,12 @@ function generateDataHash(snippets) {
 
 // Check for updates from server
 async function checkForUpdates() {
+    // Don't auto-refresh if user is viewing a preview or dialog is open
+    if (isDialogOpen || isUserViewingPreview) {
+        console.log('Skipping auto-update: user is viewing content');
+        return;
+    }
+    
     try {
         const response = await fetch('/.netlify/functions/get-data');
         
@@ -1320,13 +1409,24 @@ async function checkForUpdates() {
             
             // Check if data has changed
             if (lastUpdateHash !== null && newHash !== lastUpdateHash) {
+                // Data has changed - check if user is viewing anything
+                if (isUserViewingPreview || expandedSnippets.size > 0) {
+                    // Queue the refresh for later
+                    pendingRefresh = true;
+                    console.log('Data changed but user is viewing - queuing refresh');
+                    return;
+                }
+                
                 // Data has changed - update the UI
                 const oldLength = codeSnippets.length;
                 const change = normalizedData.length - oldLength;
                 
+                // Preserve file URLs for loaded content
+                preserveFileUrls(normalizedData);
+                
                 codeSnippets = normalizedData;
                 lastUpdateHash = newHash;
-                renderCodeList();
+                smartRenderCodeList();
                 
                 // Show notification only if there's a meaningful change
                 if (change !== 0) {
@@ -1341,6 +1441,28 @@ async function checkForUpdates() {
         // Silently fail - don't disrupt user experience
         console.error('Auto-update check failed:', error);
     }
+}
+
+// Preserve file URLs from old snippets to new ones
+function preserveFileUrls(newSnippets) {
+    for (const newSnippet of newSnippets) {
+        const existing = codeSnippets.find(s => s.id == newSnippet.id);
+        if (existing && existing.fileUrl) {
+            newSnippet.fileUrl = existing.fileUrl;
+        }
+    }
+}
+
+// Smart render that preserves scroll position and expanded states
+function smartRenderCodeList() {
+    // Save scroll position
+    const scrollPos = window.scrollY;
+    
+    // Render the list
+    renderCodeList();
+    
+    // Restore scroll position
+    window.scrollTo(0, scrollPos);
 }
 
 // Show a subtle notification when data updates
@@ -1459,12 +1581,22 @@ function pauseAutoUpdateTemporarily() {
     }, 10000); // Resume after 10 seconds of inactivity
 }
 
+// Force refresh - clears viewing state and refreshes
+function forceRefresh() {
+    expandedSnippets.clear();
+    isUserViewingPreview = false;
+    pendingRefresh = false;
+    checkForUpdates();
+}
+
 // Make functions available globally for manual control via console
 window.codeManagerControls = {
     startAutoUpdate,
     stopAutoUpdate,
     checkForUpdates,
+    forceRefresh,
     getCurrentInterval: () => autoUpdateInterval ? 'Active' : 'Paused',
+    isViewing: () => ({ isUserViewingPreview, expandedSnippets: [...expandedSnippets], pendingRefresh }),
     setUpdateInterval: (seconds) => {
         stopAutoUpdate();
         startAutoUpdate(seconds * 1000);
