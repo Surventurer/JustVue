@@ -689,10 +689,10 @@ function renderCodeList() {
                     <div>🔒 PDF is hidden</div>
                 </div>`;
             } else if (hasDecryptedContent) {
-                // Decrypted PDF content available
+                // Decrypted PDF content available - use iframe for better data URL support
                 contentHtml = `<div class="snippet-content">
                     <div class="pdf-container">
-                        <embed src="${displayContent}" type="application/pdf" width="100%" height="400px" />
+                        <iframe src="${displayContent}" width="100%" height="400px" style="border: none; border-radius: 8px;"></iframe>
                         <p class="file-name">📄 ${escapeHtml(snippet.fileName || 'Document.pdf')}</p>
                     </div>
                 </div>`;
@@ -706,7 +706,7 @@ function renderCodeList() {
             } else {
                 contentHtml = `<div class="snippet-content">
                     <div class="pdf-container">
-                        <embed src="${fileUrl}" type="application/pdf" width="100%" height="400px" />
+                        <iframe src="${fileUrl}" width="100%" height="400px" style="border: none; border-radius: 8px;"></iframe>
                         <p class="file-name">📄 ${escapeHtml(snippet.fileName || 'Document.pdf')}</p>
                     </div>
                 </div>`;
@@ -933,6 +933,9 @@ async function unlockContent(id) {
                     alert('❌ Failed to decrypt file! Incorrect password or corrupted data.');
                     return;
                 }
+                
+                // Debug: log decrypted content format
+                console.log('Decrypted content preview:', decrypted.substring(0, 100));
                 
                 // Cache the decrypted content (this is now base64 of the original file)
                 decryptedContent.set(id, decrypted);
