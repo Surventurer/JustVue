@@ -4,8 +4,49 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JustVue</title>
-    <link rel="icon" type="image/svg+xml" href="assets/images/logo.png">
+    <link rel="icon" id="favicon" type="image/png" href="assets/images/logo.png">
     <link rel="stylesheet" href="assets/css/styles.css">
+    <script>
+        // Dark mode favicon - invert logo for visibility
+        (function() {
+            const favicon = document.getElementById('favicon');
+            const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+            
+            function updateFavicon(isDark) {
+                if (isDark && favicon) {
+                    // Create white version of favicon using canvas
+                    const img = new Image();
+                    img.crossOrigin = 'anonymous';
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        
+                        // Draw original image
+                        ctx.drawImage(img, 0, 0);
+                        
+                        // Invert colors for dark mode
+                        ctx.globalCompositeOperation = 'difference';
+                        ctx.fillStyle = 'white';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        
+                        // Update favicon
+                        favicon.href = canvas.toDataURL('image/png');
+                    };
+                    img.src = 'assets/images/logo.png';
+                } else if (favicon) {
+                    favicon.href = 'assets/images/logo.png';
+                }
+            }
+            
+            // Initial check
+            updateFavicon(darkModeQuery.matches);
+            
+            // Listen for changes
+            darkModeQuery.addEventListener('change', (e) => updateFavicon(e.matches));
+        })();
+    </script>
 </head>
 <body>
     <div class="container">
