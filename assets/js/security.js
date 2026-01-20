@@ -1,6 +1,6 @@
 // ===== Security Module for JustVue =====
 // TEMPORARILY DISABLED FOR DEBUGGING
-/*
+
 (function() {
     'use strict';
     
@@ -104,10 +104,10 @@
     
     // Override console methods to limit information leakage (optional)
     // Uncomment if you want to disable console entirely
-    // const noop = function() {};
-    // ['log', 'debug', 'info', 'warn', 'error', 'table', 'trace'].forEach(function(method) {
-    //     console[method] = noop;
-    // });
+     const noop = function() {};
+     ['log', 'debug', 'info', 'warn', 'error', 'table', 'trace'].forEach(function(method) {
+         console[method] = noop;
+    });
     
 })();
-*/
+
