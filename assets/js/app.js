@@ -23,12 +23,15 @@ async function getSupabaseClient() {
     try {
         // Fetch config from server
         const response = await fetch('/.netlify/functions/config');
+        
         if (!response.ok) {
-            console.error('Failed to get Supabase config');
+            const errorData = await response.json().catch(() => ({}));
+            console.error('Config endpoint error:', response.status, errorData);
             return null;
         }
         
         supabaseConfig = await response.json();
+        console.log('Supabase config loaded:', supabaseConfig.supabaseUrl ? 'URL OK' : 'URL missing');
         
         // Initialize Supabase client with anon key
         supabaseClient = supabase.createClient(
