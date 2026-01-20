@@ -12,6 +12,64 @@ let lastUpdateHash = null;
 // Dialog state - pause loading when dialog is open
 let isDialogOpen = false;
 
+// Supabase client for direct uploads (initialized on first use)
+let supabaseClient = null;
+let supabaseConfig = null;
+
+// Initialize Supabase client for direct uploads
+async function getSupabaseClient() {
+    if (supabaseClient) return supabaseClient;
+    
+    try {
+        // Fetch config from server
+        const response = await fetch('/.netlify/functions/config');
+        if (!response.ok) {
+            console.error('Failed to get Supabase config');
+            return null;
+        }
+        
+        supabaseConfig = await response.json();
+        
+        // Initialize Supabase client with anon key
+        supabaseClient = supabase.createClient(
+            supabaseConfig.supabaseUrl,
+            supabaseConfig.supabaseAnonKey
+        );
+        
+        return supabaseClient;
+    } catch (e) {
+        console.error('Failed to initialize Supabase client:', e);
+        return null;
+    }
+}
+
+// Upload file directly to Supabase Storage (bypasses Netlify 6MB limit)
+async function uploadFileDirectly(file, snippetId) {
+    const client = await getSupabaseClient();
+    if (!client) {
+        throw new Error('Supabase client not available');
+    }
+    
+    const bucket = supabaseConfig.storageBucket || 'code-files';
+    const ext = file.name.split('.').pop() || 'bin';
+    const storagePath = `${snippetId}/${Date.now()}.${ext}`;
+    
+    // Upload file directly as blob (not base64)
+    const { data, error } = await client.storage
+        .from(bucket)
+        .upload(storagePath, file, {
+            contentType: file.type,
+            upsert: true
+        });
+    
+    if (error) {
+        console.error('Direct upload error:', error);
+        throw new Error(`Upload failed: ${error.message}`);
+    }
+    
+    return storagePath;
+}
+
 // Wrapper for prompt that pauses loading
 function showPrompt(message) {
     isDialogOpen = true;
@@ -253,6 +311,7 @@ async function addCode() {
     
     let content = '';
     let contentType = selectedContentType;
+    let storagePath = null;
     
     // Handle different content types
     if (contentType === 'text') {
@@ -269,12 +328,79 @@ async function addCode() {
             return;
         }
         
-        // Read file as base64
-        try {
-            content = await readFileAsBase64(selectedFile);
-        } catch (error) {
-            showAlert('Failed to read file!');
-            return;
+        // For non-encrypted files, upload directly to Supabase Storage (bypasses 6MB limit)
+        // For encrypted files, read as base64 and send through Netlify
+        if (!hideContent) {
+            // DIRECT UPLOAD - bypasses Netlify 6MB limit
+            addBtn.disabled = true;
+            addBtn.textContent = 'Uploading...';
+            
+            try {
+                const snippetId = Date.now();
+                storagePath = await uploadFileDirectly(selectedFile, snippetId);
+                
+                // Create snippet with storage path but NO content
+                const snippet = {
+                    id: snippetId,
+                    title: title,
+                    contentType: contentType,
+                    content: null, // No content - file already in storage
+                    storagePath: storagePath,
+                    fileName: selectedFile.name,
+                    fileType: selectedFile.type,
+                    password: password,
+                    timestamp: new Date().toLocaleString(),
+                    hidden: false,
+                    isEncrypted: false
+                };
+                
+                // Send only metadata to Netlify function
+                addBtn.textContent = 'Saving...';
+                const response = await fetch('/.netlify/functions/save-data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ snippet: snippet })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to save metadata');
+                }
+                
+                const result = await response.json();
+                const savedSnippet = result.snippet || snippet;
+                codeSnippets.unshift(savedSnippet);
+                
+                addBtn.disabled = false;
+                addBtn.textContent = 'Add Snippet';
+                
+                // Reset form
+                resetForm();
+                renderCodeList();
+                return;
+                
+            } catch (error) {
+                console.error('Direct upload failed:', error);
+                showAlert('⚠️ Failed to upload file: ' + error.message);
+                addBtn.disabled = false;
+                addBtn.textContent = 'Add Snippet';
+                return;
+            }
+        } else {
+            // ENCRYPTED FILE - must go through Netlify (has 6MB limit)
+            // Check file size first
+            const fileSizeMB = selectedFile.size / (1024 * 1024);
+            if (fileSizeMB > 4) { // Leave margin for base64 expansion
+                showAlert(`⚠️ Encrypted files must be under 4MB (yours is ${fileSizeMB.toFixed(1)}MB).\n\nFor larger files, disable "Hide Content" to upload without encryption.`);
+                return;
+            }
+            
+            // Read file as base64 for encryption
+            try {
+                content = await readFileAsBase64(selectedFile);
+            } catch (error) {
+                showAlert('Failed to read file!');
+                return;
+            }
         }
     }
     
@@ -306,7 +432,7 @@ async function addCode() {
         isEncrypted: hideContent
     };
     
-    // Save to database (files uploaded to Supabase Storage)
+    // Save to database (encrypted files uploaded through Netlify)
     try {
         addBtn.disabled = true;
         addBtn.textContent = contentType === 'text' ? 'Saving...' : 'Uploading...';
@@ -338,6 +464,12 @@ async function addCode() {
     addBtn.textContent = 'Add Snippet';
     
     // Reset form
+    resetForm();
+    renderCodeList();
+}
+
+// Reset form helper
+function resetForm() {
     passwordInput.value = '';
     titleInput.value = '';
     codeInput.value = '';
@@ -347,8 +479,6 @@ async function addCode() {
     selectedContentType = 'text';
     updateInputVisibility();
     passwordInput.focus();
-    
-    renderCodeList();
 }
 
 // Helper function to read file as base64

@@ -65,7 +65,27 @@ exports.handler = async function(event, context) {
     if (data.snippet) {
       const snippet = data.snippet;
       
-      // If it's a file (image/PDF), upload to storage first
+      // Check if file was already uploaded directly to storage (has storagePath, no content)
+      if (snippet.storagePath && !snippet.content) {
+        // File already uploaded directly by browser - just save metadata
+        const savedSnippet = await saveSnippet({
+          ...snippet,
+          content: null,
+          code: null
+        });
+        
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ 
+            success: true, 
+            message: 'Metadata saved (file already uploaded)',
+            snippet: savedSnippet
+          })
+        };
+      }
+      
+      // If it's a file (image/PDF) with content, upload to storage first
       if ((snippet.contentType === 'image' || snippet.contentType === 'pdf') && snippet.content) {
         const storagePath = await uploadFile(
           snippet.content,
