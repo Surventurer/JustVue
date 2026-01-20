@@ -990,6 +990,23 @@ h1 {
     transform: translateY(0);
 }
 
+/* File size warning note */
+.file-size-note {
+    margin-top: 15px;
+    padding: 10px 15px;
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%);
+    border: 1px solid #ffc107;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #856404;
+    text-align: center;
+    line-height: 1.4;
+}
+
+.file-size-note strong {
+    color: #664d03;
+}
+
 /* iPad and Tablet specific file upload */
 @media (min-width: 600px) and (max-width: 991px) {
     #fileUploadArea {
@@ -999,6 +1016,11 @@ h1 {
     .btn-file-select {
         padding: 14px 35px;
         font-size: 15px;
+    }
+    
+    .file-size-note {
+        font-size: 12px;
+        padding: 8px 12px;
     }
 }
 
@@ -1014,13 +1036,13 @@ h1 {
         font-size: 14px;
         width: 100%;
     }
+    
+    .file-size-note {
+        font-size: 11px;
+        padding: 8px 10px;
+        margin-top: 12px;
+    }
 }
-    transition: all 0.3s;
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-    font-weight: 600;
-}
-
-.btn-file-select:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
 }
