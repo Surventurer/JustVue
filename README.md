@@ -28,34 +28,34 @@ JustVue is a modern, secure snippet manager designed to store your code snippets
 ## How It Works
 
 ```mermaid
-graph TD
-    User[👤 User] -->|Interacts| UI[💻 JustVue Web UI]
+flowchart TD
+    User["👤 User"] -->|Interacts| UI["💻 JustVue Web UI"]
     
-    subgraph Frontend [Frontend Layer]
+    subgraph Frontend ["Frontend Layer"]
         UI
-        Logic[App Logic / State]
+        Logic["App Logic / State"]
     end
     
-    subgraph Backend [Serverless Layer (Netlify)]
-        Config[⚙️ config]
-        Crypto[🔐 crypto]
-        Save[💾 save-data]
-        Get[🔍 get-data]
+    subgraph Backend ["Serverless Layer - Netlify"]
+        Config["⚙️ config"]
+        Crypto["🔐 crypto"]
+        Save["💾 save-data"]
+        Get["🔍 get-data"]
     end
     
-    subgraph Database [Supabase Services]
-        DB[(🗄️ Database)]
-        Storage[📂 Storage Bucket]
+    subgraph Database ["Supabase Services"]
+        DB[("🗄️ Database")]
+        Storage["📂 Storage Bucket"]
     end
     
     UI -->|Init| Config
     UI -->|Input| Logic
     
-    Logic -- "Text / Hidden Content" -->|Save| Save
-    Logic -- "Public Files" -->|Direct Upload| Storage
-    Logic -- "File Metadata" -->|Save| Save
+    Logic -->|Save Text OR Hidden Content| Save
+    Logic -->|Upload Public Files| Storage
+    Logic -->|Save File Metadata| Save
     
-    Logic -- "Sensitive Data" -->|Encrypt/Decrypt| Crypto
+    Logic -->|Encrypt/Decrypt Data| Crypto
     
     Save -->|Persist| DB
     Get -->|Query| DB
