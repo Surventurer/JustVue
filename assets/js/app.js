@@ -30,13 +30,12 @@ async function getSupabaseClient() {
         const response = await fetch('/.netlify/functions/config');
         
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            console.error('Config endpoint error:', response.status, errorData);
+            // console.error('Config endpoint error:', response.status);
             return null;
         }
         
         supabaseConfig = await response.json();
-        console.log('Supabase config loaded:', supabaseConfig.supabaseUrl ? 'URL OK' : 'URL missing');
+        // console.log('Supabase config loaded');
         
         // Initialize Supabase client with anon key
         supabaseClient = supabase.createClient(
@@ -46,7 +45,7 @@ async function getSupabaseClient() {
         
         return supabaseClient;
     } catch (e) {
-        console.error('Failed to initialize Supabase client:', e);
+        // console.error('Failed to initialize Supabase client:', e);
         return null;
     }
 }
@@ -71,7 +70,7 @@ async function uploadFileDirectly(file, snippetId) {
         });
     
     if (error) {
-        console.error('Direct upload error:', error);
+        // console.error('Direct upload error:', error);
         throw new Error(`Upload failed: ${error.message}`);
     }
     
@@ -130,13 +129,13 @@ async function encryptContent(text, password) {
         const data = await response.json();
         
         if (!response.ok || !data.success) {
-            console.error('Encryption failed:', data.error);
+            // console.error('Encryption failed:', data.error);
             return null;
         }
         
         return data.encrypted;
     } catch (e) {
-        console.error('Encryption error:', e);
+        // console.error('Encryption error:', e);
         return null;
     }
 }
@@ -145,7 +144,7 @@ async function encryptContent(text, password) {
 async function decryptContent(encryptedText, password) {
     // Guard against empty content
     if (!encryptedText || encryptedText.trim() === '') {
-        console.error('Cannot decrypt: content is empty');
+        // console.error('Cannot decrypt: content is empty');
         return null;
     }
     
@@ -167,7 +166,7 @@ async function decryptContent(encryptedText, password) {
             return data.decrypted;
         }
     } catch (e) {
-        console.error('Server decryption error:', e);
+        // console.error('Server decryption error:', e);
     }
     
     // Fallback to legacy XOR decryption for old content
@@ -388,9 +387,7 @@ async function addCode() {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
                 return;
                 
-            } catch (error) {
-                console.error('Direct upload failed:', error);
-                showAlert('⚠️ Failed to upload file: ' + error.message);
+            } catch (error) {\n                // console.error('Direct upload failed:', error);\n                showAlert('⚠️ Failed to upload file: ' + error.message);
                 addBtn.disabled = false;
                 addBtn.textContent = 'Add Snippet';
                 return;
@@ -1000,7 +997,7 @@ function renderDecryptedPDFs() {
             // Remove the data attribute to prevent re-processing
             container.removeAttribute('data-pdf-content');
         } catch (e) {
-            console.error('Failed to render PDF:', e);
+            // console.error('Failed to render PDF:', e);
             container.innerHTML = `<div style="color: red;">❌ Failed to render PDF</div>`;
         }
     });
@@ -1059,7 +1056,7 @@ async function loadFileUrl(snippetId) {
             updateSnippetPreview(snippetId, data.fileUrl);
         }
     } catch (error) {
-        console.error('Failed to load file URL:', error);
+        // console.error('Failed to load file URL:', error);
         // Update just the loading element to show error
         const element = document.querySelector(`[data-snippet-id="${snippetId}"][data-auto-load="true"]`);
         if (element) {
@@ -1104,7 +1101,7 @@ function updateSnippetPreview(snippetId, fileUrl) {
             // Process pending refresh if any
             if (pendingRefresh) {
                 pendingRefresh = false;
-                console.log('Processing pending refresh');
+                // console.log('Processing pending refresh');
                 checkForUpdates();
             }
         }
@@ -1196,9 +1193,7 @@ async function unlockContent(id) {
                     return;
                 }
                 
-                // Debug: log decrypted content format
-                console.log('Decrypted content preview:', decrypted.substring(0, 100));
-                
+                // console.log('Decrypted content preview:', decrypted.substring(0, 100));
                 // Cache the decrypted content (this is now base64 of the original file)
                 decryptedContent.set(id, decrypted);
                 unlockedSnippets.add(id);
@@ -1208,7 +1203,7 @@ async function unlockContent(id) {
                 return;
             } catch (e) {
                 loadingDiv.remove();
-                console.error('Failed to load/decrypt file:', e);
+                // console.error('Failed to load/decrypt file:', e);
                 showAlert('❌ Failed to load encrypted file: ' + e.message);
                 return;
             }
@@ -1252,7 +1247,7 @@ async function unlockContent(id) {
                 checkForUpdates();
             }
         }
-    }, 30000);
+    }, 20000);
 }
 
 // Lock content (hide again)
@@ -1380,7 +1375,7 @@ function generateDataHash(snippets) {
 async function checkForUpdates() {
     // Don't auto-refresh if user is viewing a preview or dialog is open
     if (isDialogOpen || isUserViewingPreview) {
-        console.log('Skipping auto-update: user is viewing content');
+        // console.log('Skipping auto-update: user is viewing content');
         return;
     }
     
@@ -1413,7 +1408,7 @@ async function checkForUpdates() {
                 if (isUserViewingPreview || expandedSnippets.size > 0) {
                     // Queue the refresh for later
                     pendingRefresh = true;
-                    console.log('Data changed but user is viewing - queuing refresh');
+                    // console.log('Data changed but user is viewing - queuing refresh');
                     return;
                 }
                 
@@ -1438,8 +1433,7 @@ async function checkForUpdates() {
             }
         }
     } catch (error) {
-        // Silently fail - don't disrupt user experience
-        console.error('Auto-update check failed:', error);
+        // console.error('Auto-update check failed:', error);
     }
 }
 
@@ -1535,8 +1529,7 @@ function startAutoUpdate(intervalMs = 5000) {
     
     // Update indicator
     updateIndicatorStatus(true);
-    
-    console.log(`Auto-update started (checking every ${intervalMs / 1000}s)`);
+    // console.log(`Auto-update started (checking every ${intervalMs / 1000}s)`);
 }
 
 // Stop automatic updates (useful for testing or manual control)
@@ -1547,8 +1540,7 @@ function stopAutoUpdate() {
         
         // Update indicator
         updateIndicatorStatus(false);
-        
-        console.log('Auto-update stopped');
+        // console.log('Auto-update stopped');
     }
 }
 
