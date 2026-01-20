@@ -1,7 +1,7 @@
 {
   "name": "justvue",
-  "version": "1.0.0",
-  "description": "JustVue - snippet manager with PostgreSQL storage",
+  "version": "2.0.0",
+  "description": "JustVue - snippet manager with Supabase storage",
   "main": "index.html",
   "scripts": {
     "start": "echo 'Open index.html in your browser'",
@@ -14,7 +14,7 @@
   "keywords": [
     "justvue",
     "snippets",
-    "postgresql",
+    "supabase",
     "netlify"
   ],
   "author": "Surventurer",
@@ -26,6 +26,6 @@
     }
   ],
   "dependencies": {
-    "pg": "^8.11.3"
+    "@supabase/supabase-js": "^2.39.0"
   }
 }

@@ -1,7 +1,12 @@
-const { getAllSnippets } = require('./db');
+const { 
+  getAllSnippets, 
+  getSnippetCount, 
+  getSnippetsPaginated, 
+  getSnippetById,
+  getFileUrl
+} = require('./db');
 
 exports.handler = async function(event, context) {
-  // Prevent function from waiting for empty event loop
   context.callbackWaitsForEmptyEventLoop = false;
   
   const headers = {
@@ -16,27 +21,86 @@ exports.handler = async function(event, context) {
   }
 
   try {
-    const snippets = await getAllSnippets();
+    const params = event.queryStringParameters || {};
+    const page = parseInt(params.page, 10) || 0;
+    const limit = parseInt(params.limit, 10) || 50;
+    const countOnly = params.countOnly === 'true';
+    const lightweight = params.lightweight === 'true';
+    const snippetId = params.id ? parseInt(params.id, 10) : null;
+    const getUrl = params.getUrl === 'true'; // Get signed URL for file
+    
+    // Fetch single snippet by ID
+    if (snippetId) {
+      const snippet = await getSnippetById(snippetId);
+      
+      if (!snippet) {
+        return {
+          statusCode: 404,
+          headers,
+          body: JSON.stringify({ error: 'Snippet not found' })
+        };
+      }
+      
+      // If it's a file and URL is requested, get signed URL
+      if (getUrl && snippet.storagePath) {
+        const fileUrl = await getFileUrl(snippet.storagePath);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            ...snippet,
+            fileUrl: fileUrl
+          })
+        };
+      }
+      
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify(snippet)
+      };
+    }
+    
+    // Return count only
+    if (countOnly) {
+      const count = await getSnippetCount();
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ count })
+      };
+    }
+    
+    // Get paginated snippets
+    const offset = page * limit;
+    const snippets = await getSnippetsPaginated(limit, offset, lightweight);
+    const totalCount = await getSnippetCount();
+    const hasMore = offset + snippets.length < totalCount;
     
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify(snippets)
+      body: JSON.stringify({
+        snippets,
+        pagination: {
+          page,
+          limit,
+          totalCount,
+          hasMore,
+          totalPages: Math.ceil(totalCount / limit)
+        }
+      })
     };
+    
   } catch (error) {
-    console.error('Error reading database:', error.message);
+    console.error('Error reading data:', error.message);
     console.error('Error stack:', error.stack);
     
-    // Check for specific error types
-    let errorMessage = 'Failed to read database';
-    if (error.message.includes('ENOTFOUND') || error.message.includes('getaddrinfo')) {
-      errorMessage = 'Database host not found. Check DB_HOST environment variable.';
-    } else if (error.message.includes('authentication')) {
-      errorMessage = 'Database authentication failed. Check DB_USER and DB_PASSWORD.';
-    } else if (error.message.includes('timeout')) {
-      errorMessage = 'Database connection timeout. The database may be unavailable.';
-    } else if (error.message.includes('certificate')) {
-      errorMessage = 'SSL certificate error. Check DB_CA_CERT environment variable.';
+    let errorMessage = 'Failed to read data';
+    if (error.message.includes('Invalid API key')) {
+      errorMessage = 'Invalid Supabase API key. Check SUPABASE_SERVICE_KEY.';
+    } else if (error.message.includes('not found')) {
+      errorMessage = 'Database table not found. Run the schema migration.';
     }
     
     return {
@@ -44,8 +108,7 @@ exports.handler = async function(event, context) {
       headers,
       body: JSON.stringify({ 
         error: errorMessage, 
-        details: error.message,
-        hint: 'Check Netlify function logs for more details'
+        details: error.message 
       })
     };
   }

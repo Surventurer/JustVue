@@ -282,7 +282,36 @@ async function addCode() {
         isEncrypted: hideContent
     };
     
-    codeSnippets.unshift(snippet);
+    // Save to database (files uploaded to Supabase Storage)
+    try {
+        addBtn.disabled = true;
+        addBtn.textContent = contentType === 'text' ? 'Saving...' : 'Uploading...';
+        
+        const response = await fetch('/.netlify/functions/save-data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ snippet: snippet })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to save');
+        }
+        
+        const result = await response.json();
+        
+        // Add saved snippet to local array (with storage path if file)
+        const savedSnippet = result.snippet || snippet;
+        codeSnippets.unshift(savedSnippet);
+        
+    } catch (error) {
+        alert('⚠️ Failed to save to database. Please try again.');
+        addBtn.disabled = false;
+        addBtn.textContent = 'Add Snippet';
+        return;
+    }
+    
+    addBtn.disabled = false;
+    addBtn.textContent = 'Add Snippet';
     
     // Reset form
     passwordInput.value = '';
@@ -296,7 +325,6 @@ async function addCode() {
     passwordInput.focus();
     
     renderCodeList();
-    saveToDatabaseJSON();
 }
 
 // Helper function to read file as base64
@@ -334,31 +362,35 @@ async function deleteCode(id) {
         return;
     }
     
-    // Remove from local array using loose comparison
-    codeSnippets = codeSnippets.filter(s => s.id != id);
-    
-    // Remove from unlocked cache if present
-    unlockedSnippets.delete(id);
-    decryptedContent.delete(id);
-    
-    // Update GUI immediately
-    renderCodeList();
-    
-    // Save to database
+    // Delete from database (and storage if file)
     try {
-        await saveToDatabaseJSON();
+        const response = await fetch(`/.netlify/functions/save-data?id=${id}`, {
+            method: 'DELETE'
+        });
         
-        // Show success feedback briefly
+        if (!response.ok) {
+            throw new Error('Failed to delete from database');
+        }
+        
+        // Remove from local array
+        codeSnippets = codeSnippets.filter(s => s.id != id);
+        
+        // Remove from unlocked cache if present
+        unlockedSnippets.delete(id);
+        decryptedContent.delete(id);
+        
+        // Update GUI
+        renderCodeList();
+        
+        // Show success feedback
         const tempDiv = document.createElement('div');
         tempDiv.style.cssText = 'position:fixed;top:20px;right:20px;background:#4CAF50;color:white;padding:15px 25px;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,0.1);z-index:10000;font-family:Arial,sans-serif;';
-        tempDiv.textContent = '✓ Snippet deleted from database!';
+        tempDiv.textContent = '✓ Snippet deleted!';
         document.body.appendChild(tempDiv);
         setTimeout(() => tempDiv.remove(), 2000);
+        
     } catch (error) {
-        alert('⚠️ Error: Snippet removed from display but failed to save to database. Please refresh the page.');
-        // Reload from database to restore correct state
-        await loadFromDatabaseJSON();
-        renderCodeList();
+        alert('⚠️ Failed to delete from database. Please try again.');
     }
 }
 
@@ -429,13 +461,13 @@ async function downloadFile(id) {
         return;
     }
     
-    let fileContent = snippet.content || snippet.code || '';
-    
     // Check if snippet is encrypted and needs decryption
     if (snippet.isEncrypted) {
         // Check if already decrypted in cache
         if (decryptedContent.has(id)) {
-            fileContent = decryptedContent.get(id);
+            const fileContent = decryptedContent.get(id);
+            downloadBase64File(fileContent, snippet.fileName || `file-${snippet.id}`);
+            return;
         } else {
             // Need password to decrypt
             const enteredPassword = prompt('🔒 Enter password to download:');
@@ -450,20 +482,46 @@ async function downloadFile(id) {
             }
             
             // Try to decrypt (server-side)
-            const decrypted = await decryptContent(fileContent, enteredPassword);
+            const rawContent = snippet.content || snippet.code || '';
+            const decrypted = await decryptContent(rawContent, enteredPassword);
             if (!decrypted) {
                 alert('❌ Failed to decrypt file!');
                 return;
             }
             
-            fileContent = decrypted;
+            downloadBase64File(decrypted, snippet.fileName || `file-${snippet.id}`);
+            return;
         }
     }
     
-    // Create download link
+    // If file is in Supabase Storage, get signed URL
+    if (snippet.storagePath) {
+        try {
+            const response = await fetch(`/.netlify/functions/get-data?id=${id}&getUrl=true`);
+            if (!response.ok) throw new Error('Failed to get file URL');
+            
+            const data = await response.json();
+            if (data.fileUrl) {
+                // Open URL in new tab (browser will download)
+                window.open(data.fileUrl, '_blank');
+                return;
+            }
+        } catch (error) {
+            alert('❌ Failed to get download URL. Please try again.');
+            return;
+        }
+    }
+    
+    // Fallback: use content directly (base64)
+    const fileContent = snippet.content || snippet.code || '';
+    downloadBase64File(fileContent, snippet.fileName || `file-${snippet.id}`);
+}
+
+// Helper to download base64 content
+function downloadBase64File(base64Content, fileName) {
     const link = document.createElement('a');
-    link.href = fileContent;
-    link.download = snippet.fileName || `file-${snippet.id}`;
+    link.href = base64Content;
+    link.download = fileName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -513,6 +571,7 @@ function renderCodeList() {
         // Support both old 'code' and new 'content' properties
         const contentType = snippet.contentType || 'text';
         const rawContent = snippet.content || snippet.code || '';
+        const hasStoragePath = !!snippet.storagePath;
         
         // Highlight search term in title
         const highlightedTitle = searchQuery === ''
@@ -528,6 +587,9 @@ function renderCodeList() {
             displayContent = decryptedContent.get(snippet.id) || rawContent;
         }
         
+        // Check if file URL is loaded (for Supabase Storage files)
+        const fileUrl = snippet.fileUrl || displayContent;
+        
         // Render content based on type
         let contentHtml = '';
         const contentClass = isProtected ? 'snippet-content protected' : 'snippet-content';
@@ -538,9 +600,18 @@ function renderCodeList() {
                     <div style="font-size: 48px; margin-bottom: 10px;">🖼️</div>
                     <div>🔒 Image is hidden</div>
                 </div>`;
+            } else if (hasStoragePath && !snippet.fileUrl) {
+                // File stored in Supabase Storage - needs to load URL
+                contentHtml = `<div class="snippet-content" data-snippet-id="${snippet.id}">
+                    <div style="font-size: 48px; margin-bottom: 10px;">🖼️</div>
+                    <button class="btn btn-load" data-action="load-file" data-id="${snippet.id}">
+                        📥 Load Image
+                    </button>
+                    ${snippet.fileName ? `<p class="file-name">📷 ${escapeHtml(snippet.fileName)}</p>` : ''}
+                </div>`;
             } else {
                 contentHtml = `<div class="snippet-content">
-                    <img src="${displayContent}" alt="${escapeHtml(snippet.fileName || 'Image')}" style="max-width: 100%; border-radius: 8px;">
+                    <img src="${fileUrl}" alt="${escapeHtml(snippet.fileName || 'Image')}" style="max-width: 100%; border-radius: 8px;">
                     ${snippet.fileName ? `<p class="file-name">📷 ${escapeHtml(snippet.fileName)}</p>` : ''}
                 </div>`;
             }
@@ -550,10 +621,19 @@ function renderCodeList() {
                     <div style="font-size: 48px; margin-bottom: 10px;">📄</div>
                     <div>🔒 PDF is hidden</div>
                 </div>`;
+            } else if (hasStoragePath && !snippet.fileUrl) {
+                // File stored in Supabase Storage - needs to load URL
+                contentHtml = `<div class="snippet-content" data-snippet-id="${snippet.id}">
+                    <div style="font-size: 48px; margin-bottom: 10px;">📄</div>
+                    <button class="btn btn-load" data-action="load-file" data-id="${snippet.id}">
+                        📥 Load PDF
+                    </button>
+                    <p class="file-name">📄 ${escapeHtml(snippet.fileName || 'Document.pdf')}</p>
+                </div>`;
             } else {
                 contentHtml = `<div class="snippet-content">
                     <div class="pdf-container">
-                        <embed src="${displayContent}" type="application/pdf" width="100%" height="400px" />
+                        <embed src="${fileUrl}" type="application/pdf" width="100%" height="400px" />
                         <p class="file-name">📄 ${escapeHtml(snippet.fileName || 'Document.pdf')}</p>
                     </div>
                 </div>`;
@@ -652,8 +732,36 @@ codeList.addEventListener('click', async function(e) {
         unlockContent(snippet ? snippet.id : idNum);
     } else if (action === 'lock') {
         lockContent(snippet ? snippet.id : idNum);
+    } else if (action === 'load-file') {
+        // Load file URL from Supabase Storage
+        button.textContent = '⏳ Loading...';
+        button.disabled = true;
+        await loadFileUrl(snippet ? snippet.id : idNum);
     }
 });
+
+// Load file URL from Supabase Storage
+async function loadFileUrl(snippetId) {
+    try {
+        const response = await fetch(`/.netlify/functions/get-data?id=${snippetId}&getUrl=true`);
+        if (!response.ok) {
+            throw new Error('Failed to get file URL');
+        }
+        
+        const data = await response.json();
+        
+        // Update snippet in local array with file URL
+        const index = codeSnippets.findIndex(s => s.id === snippetId);
+        if (index !== -1 && data.fileUrl) {
+            codeSnippets[index].fileUrl = data.fileUrl;
+            renderCodeList();
+        }
+    } catch (error) {
+        console.error('Failed to load file URL:', error);
+        alert('❌ Failed to load file. Please try again.');
+        renderCodeList(); // Re-render to reset button
+    }
+}
 
 // Highlight matching text in search results
 function highlightText(text, query) {
@@ -798,9 +906,17 @@ async function loadFromDatabaseJSON() {
         if (response.ok) {
             const data = await response.json();
             
-            if (Array.isArray(data) && data.length > 0) {
+            // Handle paginated response
+            let snippetsArray = [];
+            if (data.snippets) {
+                snippetsArray = data.snippets;
+            } else if (Array.isArray(data)) {
+                snippetsArray = data;
+            }
+            
+            if (snippetsArray.length > 0) {
                 // Normalize IDs to numbers to ensure consistency
-                codeSnippets = data.map(snippet => ({
+                codeSnippets = snippetsArray.map(snippet => ({
                     ...snippet,
                     id: typeof snippet.id === 'string' ? parseInt(snippet.id, 10) : snippet.id
                 }));
@@ -840,34 +956,40 @@ async function checkForUpdates() {
         if (response.ok) {
             const data = await response.json();
             
-            if (Array.isArray(data)) {
-                // Normalize IDs to numbers
-                const normalizedData = data.map(snippet => ({
-                    ...snippet,
-                    id: typeof snippet.id === 'string' ? parseInt(snippet.id, 10) : snippet.id
-                }));
+            // Handle paginated response
+            let snippetsArray = [];
+            if (data.snippets) {
+                snippetsArray = data.snippets;
+            } else if (Array.isArray(data)) {
+                snippetsArray = data;
+            }
+            
+            // Normalize IDs to numbers
+            const normalizedData = snippetsArray.map(snippet => ({
+                ...snippet,
+                id: typeof snippet.id === 'string' ? parseInt(snippet.id, 10) : snippet.id
+            }));
+            
+            // Calculate hash of new data
+            const newHash = generateDataHash(normalizedData);
+            
+            // Check if data has changed
+            if (lastUpdateHash !== null && newHash !== lastUpdateHash) {
+                // Data has changed - update the UI
+                const oldLength = codeSnippets.length;
+                const change = normalizedData.length - oldLength;
                 
-                // Calculate hash of new data
-                const newHash = generateDataHash(normalizedData);
+                codeSnippets = normalizedData;
+                lastUpdateHash = newHash;
+                renderCodeList();
                 
-                // Check if data has changed
-                if (lastUpdateHash !== null && newHash !== lastUpdateHash) {
-                    // Data has changed - update the UI
-                    const oldLength = codeSnippets.length;
-                    const change = normalizedData.length - oldLength;
-                    
-                    codeSnippets = normalizedData;
-                    lastUpdateHash = newHash;
-                    renderCodeList();
-                    
-                    // Show notification only if there's a meaningful change
-                    if (change !== 0) {
-                        showUpdateNotification(change);
-                    }
-                } else if (lastUpdateHash === null) {
-                    // First check, just store the hash
-                    lastUpdateHash = newHash;
+                // Show notification only if there's a meaningful change
+                if (change !== 0) {
+                    showUpdateNotification(change);
                 }
+            } else if (lastUpdateHash === null) {
+                // First check, just store the hash
+                lastUpdateHash = newHash;
             }
         }
     } catch (error) {

@@ -1,127 +1,295 @@
-const { Pool } = require('pg');
+const { createClient } = require('@supabase/supabase-js');
 
-// Validate required environment variables
-const requiredEnvVars = ['DB_USER', 'DB_PASSWORD', 'DB_HOST', 'DB_PORT', 'DB_NAME'];
-const missingVars = requiredEnvVars.filter(v => !process.env[v]);
+// Supabase configuration
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY; // Use service key for server-side operations
 
-if (missingVars.length > 0) {
-  console.error('Missing required environment variables:', missingVars.join(', '));
+if (!supabaseUrl || !supabaseKey) {
+  console.error('Missing Supabase environment variables: SUPABASE_URL or SUPABASE_SERVICE_KEY');
 }
 
-// Aiven PostgreSQL configuration - all values from environment variables
-const config = {
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT || '5432', 10),
-  database: process.env.DB_NAME,
-  ssl: process.env.DB_CA_CERT 
-    ? {
-        rejectUnauthorized: true,
-        ca: process.env.DB_CA_CERT.replace(/\\n/g, '\n'), // Handle escaped newlines
-      }
-    : {
-        rejectUnauthorized: false, // Fallback for services that don't need explicit CA
-      },
-  connectionTimeoutMillis: 10000, // 10 second timeout
-  idleTimeoutMillis: 30000,
-};
+// Create Supabase client
+let supabase;
 
-// Log config for debugging (without sensitive data)
-console.log('DB Config:', {
-  user: config.user,
-  host: config.host,
-  port: config.port,
-  database: config.database,
-  hasCert: !!process.env.DB_CA_CERT,
-  sslMode: process.env.DB_CA_CERT ? 'verify-ca' : 'require'
-});
-
-// Create a connection pool
-let pool;
-
-function getPool() {
-  if (!pool) {
-    pool = new Pool(config);
-    
-    // Handle pool errors
-    pool.on('error', (err) => {
-      console.error('Unexpected pool error:', err);
-    });
+function getSupabase() {
+  if (!supabase) {
+    supabase = createClient(supabaseUrl, supabaseKey);
   }
-  return pool;
+  return supabase;
 }
 
-// Get all code snippets
+// Storage bucket name for files
+const STORAGE_BUCKET = 'code-files';
+
+// ===== Database Operations (Text Content) =====
+
+// Get all code snippets (metadata only for files, full content for text)
 async function getAllSnippets() {
-  const pool = getPool();
-  const result = await pool.query(
-    'SELECT * FROM code_snippets ORDER BY id DESC'
-  );
-  // Map database fields to match frontend expectations
-  return result.rows.map(row => ({
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('code_snippets')
+    .select('*')
+    .order('id', { ascending: false });
+  
+  if (error) throw error;
+  
+  return data.map(row => mapRowToSnippet(row));
+}
+
+// Get snippet count
+async function getSnippetCount() {
+  const supabase = getSupabase();
+  
+  const { count, error } = await supabase
+    .from('code_snippets')
+    .select('*', { count: 'exact', head: true });
+  
+  if (error) throw error;
+  return count || 0;
+}
+
+// Get snippets with pagination
+async function getSnippetsPaginated(limit, offset, lightweight = false) {
+  const supabase = getSupabase();
+  
+  // Select columns based on lightweight mode
+  const columns = lightweight
+    ? 'id, title, password, timestamp, hidden, is_encrypted, content_type, file_name, file_type, storage_path'
+    : '*';
+  
+  const { data, error } = await supabase
+    .from('code_snippets')
+    .select(columns)
+    .order('id', { ascending: false })
+    .range(offset, offset + limit - 1);
+  
+  if (error) throw error;
+  
+  return data.map(row => mapRowToSnippet(row, lightweight));
+}
+
+// Get single snippet by ID
+async function getSnippetById(id) {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from('code_snippets')
+    .select('*')
+    .eq('id', id)
+    .single();
+  
+  if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
+  
+  return data ? mapRowToSnippet(data) : null;
+}
+
+// Save single snippet
+async function saveSnippet(snippet) {
+  const supabase = getSupabase();
+  
+  const row = {
+    id: snippet.id,
+    title: snippet.title,
+    code: snippet.contentType === 'text' ? (snippet.code || snippet.content || '') : null,
+    password: snippet.password,
+    timestamp: snippet.timestamp,
+    hidden: snippet.hidden || false,
+    is_encrypted: snippet.isEncrypted || false,
+    content_type: snippet.contentType || 'text',
+    file_name: snippet.fileName || null,
+    file_type: snippet.fileType || null,
+    storage_path: snippet.storagePath || null
+  };
+  
+  const { data, error } = await supabase
+    .from('code_snippets')
+    .upsert(row, { onConflict: 'id' })
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return mapRowToSnippet(data);
+}
+
+// Delete snippet by ID
+async function deleteSnippet(id) {
+  const supabase = getSupabase();
+  
+  // First get the snippet to check if it has a storage path
+  const { data: snippet } = await supabase
+    .from('code_snippets')
+    .select('storage_path')
+    .eq('id', id)
+    .single();
+  
+  // Delete from storage if it has a file
+  if (snippet?.storage_path) {
+    await supabase.storage
+      .from(STORAGE_BUCKET)
+      .remove([snippet.storage_path]);
+  }
+  
+  // Delete from database
+  const { error } = await supabase
+    .from('code_snippets')
+    .delete()
+    .eq('id', id);
+  
+  if (error) throw error;
+  return true;
+}
+
+// Save all snippets (replace all - for sync)
+async function saveAllSnippets(snippets) {
+  const supabase = getSupabase();
+  
+  // Get existing snippets to clean up storage
+  const { data: existing } = await supabase
+    .from('code_snippets')
+    .select('id, storage_path');
+  
+  // Delete all existing from database
+  const { error: deleteError } = await supabase
+    .from('code_snippets')
+    .delete()
+    .neq('id', 0); // Delete all (id != 0 is always true)
+  
+  if (deleteError) throw deleteError;
+  
+  // Insert new snippets (text only - files handled separately)
+  const textSnippets = snippets.filter(s => s.contentType === 'text' || !s.contentType);
+  
+  if (textSnippets.length > 0) {
+    const rows = textSnippets.map(snippet => ({
+      id: snippet.id,
+      title: snippet.title,
+      code: snippet.code || snippet.content || '',
+      password: snippet.password,
+      timestamp: snippet.timestamp,
+      hidden: snippet.hidden || false,
+      is_encrypted: snippet.isEncrypted || false,
+      content_type: 'text',
+      file_name: null,
+      file_type: null,
+      storage_path: null
+    }));
+    
+    const { error: insertError } = await supabase
+      .from('code_snippets')
+      .insert(rows);
+    
+    if (insertError) throw insertError;
+  }
+  
+  return true;
+}
+
+// ===== Storage Operations (Images/PDFs) =====
+
+// Upload file to Supabase Storage
+async function uploadFile(fileData, fileName, fileType, snippetId) {
+  const supabase = getSupabase();
+  
+  // Create storage path: files/{snippetId}/{fileName}
+  const storagePath = `files/${snippetId}/${fileName}`;
+  
+  // Convert base64 data URL to buffer
+  const base64Data = fileData.split(',')[1]; // Remove data:mime;base64, prefix
+  const buffer = Buffer.from(base64Data, 'base64');
+  
+  // Upload to Supabase Storage
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(storagePath, buffer, {
+      contentType: fileType,
+      upsert: true
+    });
+  
+  if (error) throw error;
+  
+  return storagePath;
+}
+
+// Get signed URL for file download
+async function getFileUrl(storagePath) {
+  const supabase = getSupabase();
+  
+  // Get signed URL valid for 1 hour
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .createSignedUrl(storagePath, 3600); // 1 hour expiry
+  
+  if (error) throw error;
+  
+  return data.signedUrl;
+}
+
+// Get public URL for file (if bucket is public)
+function getPublicUrl(storagePath) {
+  const supabase = getSupabase();
+  
+  const { data } = supabase.storage
+    .from(STORAGE_BUCKET)
+    .getPublicUrl(storagePath);
+  
+  return data.publicUrl;
+}
+
+// Delete file from storage
+async function deleteFile(storagePath) {
+  const supabase = getSupabase();
+  
+  const { error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .remove([storagePath]);
+  
+  if (error) throw error;
+  return true;
+}
+
+// ===== Helper Functions =====
+
+function mapRowToSnippet(row, lightweight = false) {
+  const snippet = {
     id: row.id,
     title: row.title,
-    code: row.code,
-    content: row.code, // Map code to content for new structure
     password: row.password,
     timestamp: row.timestamp,
     hidden: row.hidden,
     isEncrypted: row.is_encrypted,
     contentType: row.content_type || 'text',
     fileName: row.file_name,
-    fileType: row.file_type
-  }));
-}
-
-// Save all snippets (replace existing data)
-async function saveAllSnippets(snippets) {
-  const pool = getPool();
-  const client = await pool.connect();
+    fileType: row.file_type,
+    storagePath: row.storage_path
+  };
   
-  try {
-    await client.query('BEGIN');
-    
-    // Delete all existing snippets
-    await client.query('DELETE FROM code_snippets');
-    
-    // Insert new snippets
-    for (const snippet of snippets) {
-      // Support both old 'code' and new 'content' properties
-      const codeValue = snippet.code || snippet.content || '';
-      const contentType = snippet.contentType || 'text';
-      const fileName = snippet.fileName || null;
-      const fileType = snippet.fileType || null;
-      
-      await client.query(
-        `INSERT INTO code_snippets (id, title, code, password, timestamp, hidden, is_encrypted, content_type, file_name, file_type)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-        [
-          snippet.id,
-          snippet.title,
-          codeValue,
-          snippet.password,
-          snippet.timestamp,
-          snippet.hidden || false,
-          snippet.isEncrypted || false,
-          contentType,
-          fileName,
-          fileType
-        ]
-      );
-    }
-    
-    await client.query('COMMIT');
-    return true;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
+  // Include content for text snippets (not lightweight mode)
+  if (!lightweight && row.content_type === 'text' && row.code !== undefined) {
+    snippet.code = row.code;
+    snippet.content = row.code;
   }
+  
+  // Mark as needing content load for files or lightweight mode
+  if (lightweight || (row.content_type !== 'text' && row.storage_path)) {
+    snippet.contentLoaded = false;
+  }
+  
+  return snippet;
 }
 
 module.exports = {
+  getSupabase,
   getAllSnippets,
-  saveAllSnippets
+  getSnippetCount,
+  getSnippetsPaginated,
+  getSnippetById,
+  saveSnippet,
+  deleteSnippet,
+  saveAllSnippets,
+  uploadFile,
+  getFileUrl,
+  getPublicUrl,
+  deleteFile,
+  STORAGE_BUCKET
 };

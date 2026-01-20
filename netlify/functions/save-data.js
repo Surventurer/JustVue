@@ -1,18 +1,53 @@
-const { saveAllSnippets } = require('./db');
+const { 
+  saveSnippet, 
+  saveAllSnippets, 
+  deleteSnippet,
+  uploadFile 
+} = require('./db');
 
 exports.handler = async function(event, context) {
-  // Prevent function from waiting for empty event loop
   context.callbackWaitsForEmptyEventLoop = false;
   
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
     'Content-Type': 'application/json'
   };
 
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
+  }
+
+  // Handle DELETE request
+  if (event.httpMethod === 'DELETE') {
+    try {
+      const params = event.queryStringParameters || {};
+      const id = params.id ? parseInt(params.id, 10) : null;
+      
+      if (!id) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: 'Missing snippet ID' })
+        };
+      }
+      
+      await deleteSnippet(id);
+      
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ success: true, message: 'Snippet deleted' })
+      };
+    } catch (error) {
+      console.error('Error deleting snippet:', error);
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'Failed to delete snippet', details: error.message })
+      };
+    }
   }
 
   if (event.httpMethod !== 'POST') {
@@ -26,27 +61,81 @@ exports.handler = async function(event, context) {
   try {
     const data = JSON.parse(event.body);
     
-    if (!Array.isArray(data)) {
+    // Handle single snippet save (with file upload support)
+    if (data.snippet) {
+      const snippet = data.snippet;
+      
+      // If it's a file (image/PDF), upload to storage first
+      if ((snippet.contentType === 'image' || snippet.contentType === 'pdf') && snippet.content) {
+        const storagePath = await uploadFile(
+          snippet.content,
+          snippet.fileName || `file-${snippet.id}`,
+          snippet.fileType || 'application/octet-stream',
+          snippet.id
+        );
+        
+        // Save metadata to database (without content, just storage path)
+        const savedSnippet = await saveSnippet({
+          ...snippet,
+          storagePath: storagePath,
+          content: null, // Don't store file content in DB
+          code: null
+        });
+        
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ 
+            success: true, 
+            message: 'File uploaded and saved',
+            snippet: savedSnippet
+          })
+        };
+      }
+      
+      // Text content - save directly to database
+      const savedSnippet = await saveSnippet(snippet);
+      
       return {
-        statusCode: 400,
+        statusCode: 200,
         headers,
-        body: JSON.stringify({ error: 'Invalid data format' })
+        body: JSON.stringify({ 
+          success: true, 
+          message: 'Snippet saved',
+          snippet: savedSnippet
+        })
       };
     }
-
-    await saveAllSnippets(data);
+    
+    // Handle batch save (array of snippets - text only)
+    if (Array.isArray(data)) {
+      // Filter to only text snippets for batch save
+      const textSnippets = data.filter(s => !s.contentType || s.contentType === 'text');
+      
+      await saveAllSnippets(textSnippets);
+      
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ 
+          success: true, 
+          message: `Saved ${textSnippets.length} text snippets`
+        })
+      };
+    }
     
     return {
-      statusCode: 200,
+      statusCode: 400,
       headers,
-      body: JSON.stringify({ success: true, message: 'Data saved successfully' })
+      body: JSON.stringify({ error: 'Invalid data format. Expected {snippet: ...} or array of snippets.' })
     };
+    
   } catch (error) {
-    console.error('Error saving database:', error);
+    console.error('Error saving data:', error);
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Failed to save database', details: error.message })
+      body: JSON.stringify({ error: 'Failed to save data', details: error.message })
     };
   }
 };
