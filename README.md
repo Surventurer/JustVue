@@ -1,10 +1,22 @@
-<p align="center">
-  <img alt="JustVue logo" width="300px" src="./assets/images/logo.png">
-</p>
+<div align="center">
+<img alt="JustVue logo" width="340px" src="./assets/images/logo.png">
+<br>
 
 [![Licensed under the Apache 2.0 open-source license](https://img.shields.io/badge/License-Apache%202.0-3c60b1.svg?logo=opensourceinitiative\&logoColor=white\&style=flat-square)](https://github.com/Surventurer/JustVue/blob/main/LICENSE)
+[![Built with Supabase](https://img.shields.io/badge/Built%20with-Supabase-6828b2.svg?style=flat-square&logo=supabase&logoColor=white)](https://supabase.com)
+[![Deployed on Netlify](https://img.shields.io/badge/Deployed%20on-Netlify-9d3bb8.svg?style=flat-square&logo=netlify&logoColor=white)](https://www.netlify.com)
+
+[Features](#features) &ndash;
+[How It Works](#how-it-works) &ndash;
+[Tech Stack](#tech-stack) &ndash;
+[Installation](#installation--setup) &ndash;
+[Usage](#usage) &ndash;
+[Contact](#contact)
+
+</div>
 
 # JustVue
+
 
 JustVue is a modern, secure snippet manager designed to store your code snippets, images, and PDF documents with ease. Built with performance and security in mind, it leverages Supabase for real-time synchronization and cloud storage, ensuring your data is accessible and up-to-date across all your devices.
 
