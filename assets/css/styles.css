@@ -1043,13 +1043,6 @@ h1 {
         margin-top: 12px;
     }
 }
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-}
-
-.btn-file-select:active {
-    transform: translateY(0);
-}
 
 .file-preview-container {
     padding: 20px;
