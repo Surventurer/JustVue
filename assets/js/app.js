@@ -689,10 +689,11 @@ function renderCodeList() {
                     <div>🔒 PDF is hidden</div>
                 </div>`;
             } else if (hasDecryptedContent) {
-                // Decrypted PDF content available - use iframe for better data URL support
+                // Decrypted PDF content available - use unique container ID for blob URL injection
+                const containerId = `pdf-container-${snippet.id}`;
                 contentHtml = `<div class="snippet-content">
-                    <div class="pdf-container">
-                        <iframe src="${displayContent}" width="100%" height="400px" style="border: none; border-radius: 8px;"></iframe>
+                    <div class="pdf-container" id="${containerId}" data-pdf-content="${encodeURIComponent(displayContent)}">
+                        <div class="loading-text">⏳ Rendering PDF...</div>
                         <p class="file-name">📄 ${escapeHtml(snippet.fileName || 'Document.pdf')}</p>
                     </div>
                 </div>`;
@@ -779,6 +780,9 @@ function renderCodeList() {
     
     // Auto-load files that need URLs (non-encrypted files in storage)
     autoLoadFiles();
+    
+    // Render decrypted PDFs (convert data URLs to blob URLs)
+    renderDecryptedPDFs();
 }
 
 // Auto-load file URLs for non-encrypted files
@@ -794,6 +798,44 @@ async function autoLoadFiles() {
             loadFileUrl(snippetId);
         }
     }
+}
+
+// Render decrypted PDFs by converting data URLs to blob URLs
+function renderDecryptedPDFs() {
+    const pdfContainers = document.querySelectorAll('[data-pdf-content]');
+    
+    pdfContainers.forEach(container => {
+        const dataUrl = decodeURIComponent(container.dataset.pdfContent);
+        
+        // Convert data URL to blob
+        try {
+            const byteString = atob(dataUrl.split(',')[1]);
+            const mimeType = dataUrl.split(',')[0].split(':')[1].split(';')[0];
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) {
+                ia[i] = byteString.charCodeAt(i);
+            }
+            const blob = new Blob([ab], { type: mimeType });
+            const blobUrl = URL.createObjectURL(blob);
+            
+            // Get the file name from the existing p element
+            const fileNameEl = container.querySelector('.file-name');
+            const fileName = fileNameEl ? fileNameEl.outerHTML : '';
+            
+            // Replace container content with iframe using blob URL
+            container.innerHTML = `
+                <iframe src="${blobUrl}" width="100%" height="400px" style="border: none; border-radius: 8px;"></iframe>
+                ${fileName}
+            `;
+            
+            // Remove the data attribute to prevent re-processing
+            container.removeAttribute('data-pdf-content');
+        } catch (e) {
+            console.error('Failed to render PDF:', e);
+            container.innerHTML = `<div style="color: red;">❌ Failed to render PDF</div>`;
+        }
+    });
 }
 
 // Event delegation for buttons
