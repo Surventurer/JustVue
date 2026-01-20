@@ -603,18 +603,69 @@ async function copyToClipboard(id, button) {
         }
     }
     
-    navigator.clipboard.writeText(contentToCopy).then(() => {
-        const originalText = button.textContent;
-        button.textContent = '✓ Copied!';
-        button.classList.add('copied');
-        
-        setTimeout(() => {
-            button.textContent = originalText;
-            button.classList.remove('copied');
-        }, 2000);
-    }).catch(err => {
-        showAlert('Failed to copy to clipboard');
-    });
+    // Copy to clipboard with fallback for mobile
+    copyTextToClipboard(contentToCopy, button);
+}
+
+// Helper function to copy text with mobile fallback
+function copyTextToClipboard(text, button) {
+    const originalText = button.textContent;
+    
+    // Try modern clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            button.textContent = '✓ Copied!';
+            button.classList.add('copied');
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.classList.remove('copied');
+            }, 2000);
+        }).catch(() => {
+            // Fallback for mobile/permission issues
+            fallbackCopyToClipboard(text, button, originalText);
+        });
+    } else {
+        // Fallback for older browsers
+        fallbackCopyToClipboard(text, button, originalText);
+    }
+}
+
+// Fallback copy method using textarea (works on mobile)
+function fallbackCopyToClipboard(text, button, originalText) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    
+    // Avoid scrolling to bottom
+    textArea.style.top = '0';
+    textArea.style.left = '0';
+    textArea.style.position = 'fixed';
+    textArea.style.opacity = '0';
+    textArea.style.pointerEvents = 'none';
+    
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    // For iOS
+    textArea.setSelectionRange(0, text.length);
+    
+    try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+            button.textContent = '✓ Copied!';
+            button.classList.add('copied');
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.classList.remove('copied');
+            }, 2000);
+        } else {
+            showAlert('Failed to copy. Please copy manually.');
+        }
+    } catch (err) {
+        showAlert('Failed to copy. Please copy manually.');
+    }
+    
+    document.body.removeChild(textArea);
 }
 
 // Download file function (for images and PDFs)
