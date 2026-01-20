@@ -202,12 +202,23 @@ async function saveAllSnippets(snippets) {
 async function uploadFile(fileData, fileName, fileType, snippetId) {
   const supabase = getSupabase();
   
+  // Sanitize filename (remove special chars that might cause issues)
+  const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  
   // Create storage path: files/{snippetId}/{fileName}
-  const storagePath = `files/${snippetId}/${fileName}`;
+  const storagePath = `files/${snippetId}/${safeFileName}`;
   
   // Convert base64 data URL to buffer
-  const base64Data = fileData.split(',')[1]; // Remove data:mime;base64, prefix
+  let base64Data;
+  if (fileData.includes(',')) {
+    base64Data = fileData.split(',')[1]; // Remove data:mime;base64, prefix
+  } else {
+    base64Data = fileData; // Already just base64
+  }
+  
   const buffer = Buffer.from(base64Data, 'base64');
+  
+  console.log(`Uploading file: ${storagePath}, size: ${buffer.length} bytes`);
   
   // Upload to Supabase Storage
   const { data, error } = await supabase.storage
@@ -217,7 +228,17 @@ async function uploadFile(fileData, fileName, fileType, snippetId) {
       upsert: true
     });
   
-  if (error) throw error;
+  if (error) {
+    console.error('Storage upload error:', error);
+    // Provide helpful error message
+    if (error.message.includes('Bucket not found')) {
+      throw new Error(`Storage bucket "${STORAGE_BUCKET}" not found. Create it in Supabase Dashboard > Storage.`);
+    }
+    if (error.message.includes('not allowed') || error.message.includes('policy')) {
+      throw new Error(`Storage permission denied. Check bucket policies in Supabase Dashboard > Storage > ${STORAGE_BUCKET} > Policies.`);
+    }
+    throw error;
+  }
   
   return storagePath;
 }
