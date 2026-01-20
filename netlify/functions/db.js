@@ -4,16 +4,27 @@ const { createClient } = require('@supabase/supabase-js');
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY; // Use service key for server-side operations
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('Missing Supabase environment variables: SUPABASE_URL or SUPABASE_SERVICE_KEY');
-}
-
 // Create Supabase client
 let supabase;
+let initError = null;
 
 function getSupabase() {
+  if (initError) {
+    throw initError;
+  }
+  
   if (!supabase) {
-    supabase = createClient(supabaseUrl, supabaseKey);
+    if (!supabaseUrl || !supabaseKey) {
+      initError = new Error('Missing Supabase environment variables: SUPABASE_URL or SUPABASE_SERVICE_KEY. Please set them in Netlify Dashboard > Site Settings > Environment Variables.');
+      throw initError;
+    }
+    
+    try {
+      supabase = createClient(supabaseUrl, supabaseKey);
+    } catch (err) {
+      initError = new Error(`Failed to create Supabase client: ${err.message}`);
+      throw initError;
+    }
   }
   return supabase;
 }

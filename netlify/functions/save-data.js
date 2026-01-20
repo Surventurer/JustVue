@@ -132,10 +132,21 @@ exports.handler = async function(event, context) {
     
   } catch (error) {
     console.error('Error saving data:', error);
+    
+    // Provide helpful error messages
+    let errorMessage = 'Failed to save data';
+    if (error.message.includes('Supabase environment')) {
+      errorMessage = 'Database not configured. Set SUPABASE_URL and SUPABASE_SERVICE_KEY in Netlify environment variables.';
+    } else if (error.message.includes('Invalid API key')) {
+      errorMessage = 'Invalid Supabase API key. Check SUPABASE_SERVICE_KEY.';
+    } else if (error.message.includes('relation') && error.message.includes('does not exist')) {
+      errorMessage = 'Database table not found. Run the schema SQL in Supabase.';
+    }
+    
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Failed to save data', details: error.message })
+      body: JSON.stringify({ error: errorMessage, details: error.message })
     };
   }
 };
