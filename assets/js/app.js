@@ -387,7 +387,9 @@ async function addCode() {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
                 return;
                 
-            } catch (error) {\n                // console.error('Direct upload failed:', error);\n                showAlert('⚠️ Failed to upload file: ' + error.message);
+            } catch (error) {
+                // console.error('Direct upload failed:', error);
+                showAlert('⚠️ Failed to upload file: ' + error.message);
                 addBtn.disabled = false;
                 addBtn.textContent = 'Add Snippet';
                 return;
