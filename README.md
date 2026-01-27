@@ -32,16 +32,19 @@ JustVue is a modern, secure snippet manager designed to store your code snippets
   - **Password Protection**: Secure individual snippets with a password.
   - **Encryption**: Content can be encrypted server-side (AES-256-GCM) before storage.
   - **Hide Content**: Toggle visibility of sensitive snippets.
+  - **Security Headers**: X-Frame-Options, X-Content-Type-Options, and Referrer-Policy for enhanced protection.
 
 - **☁️ Cloud Sync & Real-Time Updates**
   - Powered by **Supabase**.
   - **Live Sync**: Changes defined on one device appear instantly on others.
   - **Auto-Update**: The UI refreshes automatically when new data is available.
+  - **Smart Pause**: Auto-updates pause when tab is hidden (saves battery & bandwidth).
 
 - **🎨 Modern UI/UX**
   - Clean, responsive design.
-  - **Dark Mode**: Automatic theme detection with adaptive favicon.
+  - **Dark Mode**: Full dark mode support with automatic system preference detection.
   - **Search**: Instant client-side filtering by title or content.
+  - **Native-Style Dialogs**: Custom password modals that look like native browser prompts.
 
 ## How It Works
 
@@ -119,11 +122,22 @@ If deploying to Netlify, set the following environment variables in your Site Se
 - `SUPABASE_ANON_KEY`: Your Supabase **public** `anon` key.
 - `SUPABASE_SERVICE_KEY`: Your Supabase **secret** `service_role` key (required for server-side functions).
 
+For local development, create a `.env` file:
+
+```bash
+SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_KEY=your_service_key
+```
+
 ### 4. Local Development
 
 To run the project locally with serverless functions support, use Netlify CLI:
 
 ```bash
+# Install dependencies
+npm install
+
 # Install Netlify CLI globally
 npm install -g netlify-cli
 
