@@ -1643,6 +1643,27 @@ function forceRefresh() {
     checkForUpdates();
 }
 
+// ===== Page Visibility API - Optimize battery and network usage =====
+// Pause auto-updates when tab is hidden
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        // Tab is hidden - pause auto-updates to save resources
+        if (autoUpdateInterval) {
+            stopAutoUpdate();
+            // Mark that we paused due to visibility (not user action)
+            window._pausedByVisibility = true;
+        }
+    } else {
+        // Tab is visible again - resume auto-updates and check for changes
+        if (window._pausedByVisibility) {
+            window._pausedByVisibility = false;
+            startAutoUpdate();
+            // Immediately check for updates since we may have missed changes
+            checkForUpdates();
+        }
+    }
+});
+
 // Make functions available globally for manual control via console
 window.codeManagerControls = {
     startAutoUpdate,

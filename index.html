@@ -3,7 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JustVue</title>
+    <meta name="description" content="JustVue - A modern, secure snippet manager for code, images, and PDFs with real-time sync and end-to-end encryption.">
+    <meta name="keywords" content="snippet manager, code storage, secure notes, encrypted storage, Supabase">
+    <meta name="author" content="Surventurer">
+    <meta name="theme-color" content="#667eea">
+    
+    <!-- Open Graph / Social Media -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="JustVue - Secure Snippet Manager">
+    <meta property="og:description" content="Store your code snippets, images, and PDFs securely with real-time sync.">
+    <meta property="og:image" content="/assets/images/logo.png">
+    
+    <!-- Performance: Preconnect to external resources -->
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    
+    <title>JustVue - Secure Snippet Manager</title>
     <link rel="icon" id="favicon" type="image/png" href="assets/images/logo.png">
     <link rel="stylesheet" href="assets/css/styles.css">
     <script>
@@ -58,12 +73,12 @@
         </div>
         
         <div class="search-section">
-            <input type="text" id="searchInput" placeholder="🔍 Search: title, date, or use + for both">
+            <input type="text" id="searchInput" placeholder="🔍 Search: title, date, or use + for both" aria-label="Search snippets">
         </div>
         
         <div class="input-section">
-            <input type="password" id="passwordInput" placeholder="Enter password...">
-            <input type="text" id="titleInput" placeholder="Enter a title...">
+            <input type="password" id="passwordInput" placeholder="Enter password..." aria-label="Password for snippet" autocomplete="new-password">
+            <input type="text" id="titleInput" placeholder="Enter a title..." aria-label="Snippet title">
             
             <div class="content-type-selector">
                 <label class="type-option">
@@ -80,7 +95,7 @@
                 </label>
             </div>
             
-            <textarea id="codeInput" placeholder="Enter your text/code here..."></textarea>
+            <textarea id="codeInput" placeholder="Enter your text/code here..." aria-label="Snippet content"></textarea>
             
             <div id="fileUploadArea" style="display:none;">
                 <input type="file" id="fileInput" accept="image/*,.pdf" style="display:none;">

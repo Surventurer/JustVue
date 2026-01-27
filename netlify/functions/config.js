@@ -1,12 +1,13 @@
 // Provide public Supabase config to frontend for direct uploads
 // Only exposes the anon key (safe for client-side use)
 
-exports.handler = async function(event, context) {
+exports.handler = async function (event, context) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Cache-Control': 'public, max-age=300'
   };
 
   if (event.httpMethod === 'OPTIONS') {
@@ -29,7 +30,7 @@ exports.handler = async function(event, context) {
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         error: 'Supabase config not available',
         message: 'Set SUPABASE_URL and SUPABASE_ANON_KEY in Netlify environment variables'
       })
