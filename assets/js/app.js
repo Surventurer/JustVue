@@ -24,25 +24,25 @@ let supabaseConfig = null;
 // Initialize Supabase client for direct uploads
 async function getSupabaseClient() {
     if (supabaseClient) return supabaseClient;
-    
+
     try {
         // Fetch config from server
         const response = await fetch('/.netlify/functions/config');
-        
+
         if (!response.ok) {
             // console.error('Config endpoint error:', response.status);
             return null;
         }
-        
+
         supabaseConfig = await response.json();
         // console.log('Supabase config loaded');
-        
+
         // Initialize Supabase client with anon key
         supabaseClient = supabase.createClient(
             supabaseConfig.supabaseUrl,
             supabaseConfig.supabaseAnonKey
         );
-        
+
         return supabaseClient;
     } catch (e) {
         // console.error('Failed to initialize Supabase client:', e);
@@ -56,11 +56,11 @@ async function uploadFileDirectly(file, snippetId) {
     if (!client) {
         throw new Error('Supabase client not available');
     }
-    
+
     const bucket = supabaseConfig.storageBucket || 'code-files';
     const ext = file.name.split('.').pop() || 'bin';
     const storagePath = `${snippetId}/${Date.now()}.${ext}`;
-    
+
     // Upload file directly as blob (not base64)
     const { data, error } = await client.storage
         .from(bucket)
@@ -68,12 +68,12 @@ async function uploadFileDirectly(file, snippetId) {
             contentType: file.type,
             upsert: true
         });
-    
+
     if (error) {
         // console.error('Direct upload error:', error);
         throw new Error(`Upload failed: ${error.message}`);
     }
-    
+
     return storagePath;
 }
 
@@ -125,14 +125,14 @@ async function encryptContent(text, password) {
                 password: password
             })
         });
-        
+
         const data = await response.json();
-        
+
         if (!response.ok || !data.success) {
             // console.error('Encryption failed:', data.error);
             return null;
         }
-        
+
         return data.encrypted;
     } catch (e) {
         // console.error('Encryption error:', e);
@@ -147,7 +147,7 @@ async function decryptContent(encryptedText, password) {
         // console.error('Cannot decrypt: content is empty');
         return null;
     }
-    
+
     // First, try server-side AES decryption
     try {
         const response = await fetch('/.netlify/functions/crypto', {
@@ -159,22 +159,22 @@ async function decryptContent(encryptedText, password) {
                 password: password
             })
         });
-        
+
         const data = await response.json();
-        
+
         if (response.ok && data.success) {
             return data.decrypted;
         }
     } catch (e) {
         // console.error('Server decryption error:', e);
     }
-    
+
     // Fallback to legacy XOR decryption for old content
     const legacyResult = legacyDecrypt(encryptedText, password);
     if (legacyResult) {
         return legacyResult;
     }
-    
+
     return null;
 }
 
@@ -214,14 +214,14 @@ fileInput.addEventListener('change', handleFileSelect);
 function handleFileSelect(e) {
     const file = e.target.files[0];
     if (!file) return;
-    
+
     selectedFile = file;
-    
+
     // Show preview
     const reader = new FileReader();
     reader.onload = (event) => {
         filePreview.style.display = 'block';
-        
+
         if (file.type.startsWith('image/')) {
             filePreview.innerHTML = `
                 <div class="file-preview-container">
@@ -303,23 +303,23 @@ async function addCode() {
     const password = passwordInput.value.trim();
     const title = titleInput.value.trim();
     const hideContent = hideContentToggle.checked;
-    
+
     if (password === '') {
         showAlert('Please enter a password!');
         passwordInput.focus();
         return;
     }
-    
+
     if (title === '') {
         showAlert('Please enter a title!');
         titleInput.focus();
         return;
     }
-    
+
     let content = '';
     let contentType = selectedContentType;
     let storagePath = null;
-    
+
     // Handle different content types
     if (contentType === 'text') {
         const code = codeInput.value.trim();
@@ -334,18 +334,18 @@ async function addCode() {
             showAlert('Please select a file!');
             return;
         }
-        
+
         // For non-encrypted files, upload directly to Supabase Storage (bypasses 6MB limit)
         // For encrypted files, read as base64 and send through Netlify
         if (!hideContent) {
             // DIRECT UPLOAD - bypasses Netlify 6MB limit
             addBtn.disabled = true;
             addBtn.textContent = 'Uploading...';
-            
+
             try {
                 const snippetId = Date.now();
                 storagePath = await uploadFileDirectly(selectedFile, snippetId);
-                
+
                 // Create snippet with storage path but NO content
                 const snippet = {
                     id: snippetId,
@@ -360,7 +360,7 @@ async function addCode() {
                     hidden: false,
                     isEncrypted: false
                 };
-                
+
                 // Send only metadata to Netlify function
                 addBtn.textContent = 'Saving...';
                 const response = await fetch('/.netlify/functions/save-data', {
@@ -368,25 +368,25 @@ async function addCode() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ snippet: snippet })
                 });
-                
+
                 if (!response.ok) {
                     throw new Error('Failed to save metadata');
                 }
-                
+
                 const result = await response.json();
                 const savedSnippet = result.snippet || snippet;
                 codeSnippets.unshift(savedSnippet);
-                
+
                 addBtn.disabled = false;
                 addBtn.textContent = 'Add Snippet';
-                
+
                 // Reset form
                 resetForm();
                 renderCodeList();
                 // Scroll to top to show new snippet
                 window.scrollTo({ top: 0, behavior: 'smooth' });
                 return;
-                
+
             } catch (error) {
                 // console.error('Direct upload failed:', error);
                 showAlert('⚠️ Failed to upload file: ' + error.message);
@@ -402,7 +402,7 @@ async function addCode() {
                 showAlert(`⚠️ Encrypted files must be under 4MB (yours is ${fileSizeMB.toFixed(1)}MB).\n\nFor larger files, disable "Hide Content" to upload without encryption.`);
                 return;
             }
-            
+
             // Read file as base64 for encryption
             try {
                 content = await readFileAsBase64(selectedFile);
@@ -412,7 +412,7 @@ async function addCode() {
             }
         }
     }
-    
+
     // Encrypt content if hidden (using server-side encryption)
     let finalContent = content;
     if (hideContent) {
@@ -421,13 +421,13 @@ async function addCode() {
         finalContent = await encryptContent(content, password);
         addBtn.disabled = false;
         addBtn.textContent = 'Add Snippet';
-        
+
         if (!finalContent) {
             showAlert('Failed to encrypt content!');
             return;
         }
     }
-    
+
     const snippet = {
         id: Date.now(),
         title: title,
@@ -440,38 +440,38 @@ async function addCode() {
         hidden: hideContent,
         isEncrypted: hideContent
     };
-    
+
     // Save to database (encrypted files uploaded through Netlify)
     try {
         addBtn.disabled = true;
         addBtn.textContent = contentType === 'text' ? 'Saving...' : 'Uploading...';
-        
+
         const response = await fetch('/.netlify/functions/save-data', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ snippet: snippet })
         });
-        
+
         if (!response.ok) {
             throw new Error('Failed to save');
         }
-        
+
         const result = await response.json();
-        
+
         // Add saved snippet to local array (with storage path if file)
         const savedSnippet = result.snippet || snippet;
         codeSnippets.unshift(savedSnippet);
-        
+
     } catch (error) {
         showAlert('⚠️ Failed to save to database. Please try again.');
         addBtn.disabled = false;
         addBtn.textContent = 'Add Snippet';
         return;
     }
-    
+
     addBtn.disabled = false;
     addBtn.textContent = 'Add Snippet';
-    
+
     // Reset form
     resetForm();
     renderCodeList();
@@ -506,117 +506,272 @@ function readFileAsBase64(file) {
 async function deleteCode(id) {
     // Use loose comparison (==) to match both string and number types
     const snippet = codeSnippets.find(s => s.id == id);
-    
+
     if (!snippet) {
         showAlert('❌ Snippet not found!');
         return;
     }
-    
+
     const enteredPassword = showPrompt('Enter password to delete this snippet:');
-    
+
     if (enteredPassword === null) {
         return; // User cancelled
     }
-    
+
     if (enteredPassword !== snippet.password) {
         showAlert('❌ Incorrect password! Cannot delete snippet.');
         return;
     }
-    
+
     if (!confirm('⚠️ Are you sure you want to delete this snippet? This action cannot be undone.')) {
         return;
     }
-    
+
     // Delete from database (and storage if file)
     try {
         const response = await fetch(`/.netlify/functions/save-data?id=${id}`, {
             method: 'DELETE'
         });
-        
+
         if (!response.ok) {
             throw new Error('Failed to delete from database');
         }
-        
+
         // Remove from local array
         codeSnippets = codeSnippets.filter(s => s.id != id);
-        
+
         // Remove from unlocked cache if present
         unlockedSnippets.delete(id);
         decryptedContent.delete(id);
-        
+
         // Update GUI
         renderCodeList();
-        
+
         // Show success feedback
         const tempDiv = document.createElement('div');
         tempDiv.style.cssText = 'position:fixed;top:20px;right:20px;background:#4CAF50;color:white;padding:15px 25px;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,0.1);z-index:10000;font-family:Arial,sans-serif;';
         tempDiv.textContent = '✓ Snippet deleted!';
         document.body.appendChild(tempDiv);
         setTimeout(() => tempDiv.remove(), 2000);
-        
+
     } catch (error) {
         showAlert('⚠️ Failed to delete from database. Please try again.');
     }
 }
 
-// Copy to clipboard function
+// Copy to clipboard function (mobile-friendly)
 async function copyToClipboard(id, button) {
     const snippet = codeSnippets.find(s => s.id == id);
-    
+
     if (!snippet) {
         showAlert('❌ Snippet not found!');
         return;
     }
-    
+
     // Use content property or fallback to code for backward compatibility
     let contentToCopy = snippet.content || snippet.code || '';
-    
+
     // Check if snippet is encrypted and needs decryption
     if (snippet.isEncrypted) {
         // Check if already decrypted in cache (snippet is unlocked)
         if (decryptedContent.has(id)) {
             contentToCopy = decryptedContent.get(id);
+            // Content is cached, copy directly (we have user gesture from button click)
+            copyTextToClipboard(contentToCopy, button);
+            return;
         } else {
-            // Need password to decrypt
-            const enteredPassword = showPrompt('🔒 Enter password to copy:');
-            
-            if (enteredPassword === null) {
-                return; // User cancelled
-            }
-            
-            if (enteredPassword !== snippet.password) {
-                showAlert('❌ Incorrect password! Cannot copy content.');
-                return;
-            }
-            
-            // Try to decrypt with the correct password (server-side)
-            button.textContent = '⏳ Decrypting...';
-            const decrypted = await decryptContent(contentToCopy, enteredPassword);
-            if (!decrypted) {
-                button.textContent = '📋 Copy';
-                showAlert('❌ Failed to decrypt content!');
-                return;
-            }
-            
-            contentToCopy = decrypted;
-            // Don't cache it since we're not unlocking the view
+            // Need password to decrypt - use custom modal for mobile compatibility
+            showPasswordModalForCopy(snippet, button);
+            return;
         }
     }
-    
-    // Reset button text before copying (in case it shows "Decrypting...")
-    button.textContent = '📋 Copy';
-    
-    // Copy to clipboard with fallback for mobile
+
+    // Non-encrypted content - copy directly
     copyTextToClipboard(contentToCopy, button);
+}
+
+// Show custom password modal for copy operation (mobile-friendly)
+function showPasswordModalForCopy(snippet, button) {
+    isDialogOpen = true;
+
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'password-modal-overlay';
+    overlay.innerHTML = `
+        <div class="password-modal">
+            <div class="password-modal-header">
+                <div class="password-modal-site">${window.location.hostname || 'JustVue'} says</div>
+                <div class="password-modal-title">🔒 Enter password to copy:</div>
+            </div>
+            <div class="password-modal-body">
+                <input type="password" class="password-modal-input" placeholder="" autocomplete="off" autofocus>
+                <div class="password-modal-error">Incorrect password</div>
+            </div>
+            <div class="password-modal-buttons">
+                <button type="button" class="password-modal-btn password-modal-btn-cancel">Cancel</button>
+                <button type="button" class="password-modal-btn password-modal-btn-submit">OK</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const input = overlay.querySelector('.password-modal-input');
+    const errorEl = overlay.querySelector('.password-modal-error');
+    const cancelBtn = overlay.querySelector('.password-modal-btn-cancel');
+    const submitBtn = overlay.querySelector('.password-modal-btn-submit');
+
+    // Focus input after animation
+    setTimeout(() => input.focus(), 100);
+
+    // Close modal helper
+    function closeModal() {
+        isDialogOpen = false;
+        overlay.style.opacity = '0';
+        setTimeout(() => overlay.remove(), 200);
+    }
+
+    // Cancel button
+    cancelBtn.addEventListener('click', closeModal);
+
+    // Click outside to close
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeModal();
+    });
+
+    // Submit button - decrypt, cache, then copy (button click = user gesture)
+    submitBtn.addEventListener('click', async () => {
+        const enteredPassword = input.value;
+
+        if (enteredPassword !== snippet.password) {
+            errorEl.classList.add('show');
+            input.focus();
+            input.select();
+            return;
+        }
+
+        errorEl.classList.remove('show');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'OK';
+
+        // Decrypt the content
+        const rawContent = snippet.content || snippet.code || '';
+        const decrypted = await decryptContent(rawContent, enteredPassword);
+
+        if (!decrypted) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'OK';
+            errorEl.textContent = 'Failed to decrypt';
+            errorEl.classList.add('show');
+            return;
+        }
+
+        // Cache the decrypted content
+        decryptedContent.set(snippet.id, decrypted);
+
+        // Now copy - this click event IS a user gesture, so clipboard should work!
+        const copySuccess = await copyTextWithResult(decrypted);
+
+        closeModal();
+
+        if (copySuccess) {
+            button.textContent = '✓ Copied!';
+            button.classList.add('copied');
+            setTimeout(() => {
+                button.textContent = '📋 Copy';
+                button.classList.remove('copied');
+            }, 2000);
+        } else {
+            // Fallback: show the decrypted content for manual copy
+            showManualCopyModal(decrypted);
+        }
+    });
+
+    // Enter key to submit
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            submitBtn.click();
+        } else if (e.key === 'Escape') {
+            closeModal();
+        }
+    });
+}
+
+// Copy text and return success/failure (for modal flow)
+async function copyTextWithResult(text) {
+    // Try clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch (e) {
+            // Clipboard API failed, try fallback
+        }
+    }
+
+    // Fallback to execCommand
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none;';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    textArea.setSelectionRange(0, text.length);
+
+    let success = false;
+    try {
+        success = document.execCommand('copy');
+    } catch (e) {
+        success = false;
+    }
+
+    document.body.removeChild(textArea);
+    return success;
+}
+
+// Show modal with content for manual copy (last resort fallback)
+function showManualCopyModal(text) {
+    const overlay = document.createElement('div');
+    overlay.className = 'password-modal-overlay';
+    overlay.innerHTML = `
+        <div class="password-modal" style="max-width: 500px;">
+            <div class="password-modal-title">📋 Copy the text below</div>
+            <textarea class="password-modal-input" style="min-height: 150px; font-family: monospace; resize: vertical;" readonly>${escapeHtml(text)}</textarea>
+            <div class="password-modal-buttons">
+                <button type="button" class="password-modal-btn password-modal-btn-submit" style="flex: 1;">Close</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const textarea = overlay.querySelector('textarea');
+    const closeBtn = overlay.querySelector('.password-modal-btn-submit');
+
+    // Select all text for easy copying
+    setTimeout(() => {
+        textarea.focus();
+        textarea.select();
+    }, 100);
+
+    function closeModal() {
+        overlay.style.opacity = '0';
+        setTimeout(() => overlay.remove(), 200);
+    }
+
+    closeBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeModal();
+    });
 }
 
 // Helper function to copy text with mobile fallback
 function copyTextToClipboard(text, button) {
     const originalText = button.textContent;
-    
+
     // Ensure window has focus before clipboard operation (fixes Firefox after dialogs)
     window.focus();
-    
+
     // Use a small delay to ensure focus is restored after dialogs (needed for Firefox)
     setTimeout(() => {
         // Try modern clipboard API first
@@ -643,21 +798,21 @@ function copyTextToClipboard(text, button) {
 function fallbackCopyToClipboard(text, button, originalText) {
     const textArea = document.createElement('textarea');
     textArea.value = text;
-    
+
     // Avoid scrolling to bottom
     textArea.style.top = '0';
     textArea.style.left = '0';
     textArea.style.position = 'fixed';
     textArea.style.opacity = '0';
     textArea.style.pointerEvents = 'none';
-    
+
     document.body.appendChild(textArea);
     textArea.focus();
     textArea.select();
-    
+
     // For iOS
     textArea.setSelectionRange(0, text.length);
-    
+
     try {
         const successful = document.execCommand('copy');
         if (successful) {
@@ -673,19 +828,19 @@ function fallbackCopyToClipboard(text, button, originalText) {
     } catch (err) {
         showAlert('Failed to copy. Please copy manually.');
     }
-    
+
     document.body.removeChild(textArea);
 }
 
 // Download file function (for images and PDFs)
 async function downloadFile(id) {
     const snippet = codeSnippets.find(s => s.id == id);
-    
+
     if (!snippet) {
         showAlert('❌ Snippet not found!');
         return;
     }
-    
+
     // Check if snippet is encrypted and needs decryption
     if (snippet.isEncrypted) {
         // Check if already decrypted in cache
@@ -696,23 +851,23 @@ async function downloadFile(id) {
         } else {
             // Need password to decrypt
             const enteredPassword = showPrompt('🔒 Enter password to download:');
-            
+
             if (enteredPassword === null) {
                 return; // User cancelled
             }
-            
+
             if (enteredPassword !== snippet.password) {
                 showAlert('❌ Incorrect password! Cannot download file.');
                 return;
             }
-            
+
             // If file is in storage, download and decrypt
             if (snippet.storagePath) {
                 const loadingDiv = document.createElement('div');
                 loadingDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);color:white;padding:20px 40px;border-radius:10px;z-index:10000;';
                 loadingDiv.textContent = '📥 Downloading encrypted file...';
                 document.body.appendChild(loadingDiv);
-                
+
                 try {
                     const response = await fetch(`/.netlify/functions/get-data?id=${id}&getContent=true`);
                     if (!response.ok) {
@@ -720,26 +875,26 @@ async function downloadFile(id) {
                         showAlert('❌ Failed to download encrypted file');
                         return;
                     }
-                    
+
                     const data = await response.json();
                     const rawContent = data.content;
-                    
+
                     if (!rawContent) {
                         loadingDiv.remove();
                         showAlert('❌ No encrypted content found');
                         return;
                     }
-                    
+
                     loadingDiv.textContent = '🔓 Decrypting...';
-                    
+
                     const decrypted = await decryptContent(rawContent, enteredPassword);
                     loadingDiv.remove();
-                    
+
                     if (!decrypted) {
                         showAlert('❌ Failed to decrypt file!');
                         return;
                     }
-                    
+
                     // Cache decrypted content
                     decryptedContent.set(id, decrypted);
                     downloadBase64File(decrypted, snippet.fileName || `file-${snippet.id}`);
@@ -750,7 +905,7 @@ async function downloadFile(id) {
                     return;
                 }
             }
-            
+
             // Try to decrypt from content (text/inline)
             const rawContent = snippet.content || snippet.code || '';
             const decrypted = await decryptContent(rawContent, enteredPassword);
@@ -758,18 +913,18 @@ async function downloadFile(id) {
                 showAlert('❌ Failed to decrypt file!');
                 return;
             }
-            
+
             downloadBase64File(decrypted, snippet.fileName || `file-${snippet.id}`);
             return;
         }
     }
-    
+
     // If file is in Supabase Storage, get signed URL and download
     if (snippet.storagePath) {
         try {
             const response = await fetch(`/.netlify/functions/get-data?id=${id}&getUrl=true`);
             if (!response.ok) throw new Error('Failed to get file URL');
-            
+
             const data = await response.json();
             if (data.fileUrl) {
                 // Fetch the file and trigger download
@@ -790,7 +945,7 @@ async function downloadFile(id) {
             return;
         }
     }
-    
+
     // Fallback: use content directly (base64)
     const fileContent = snippet.content || snippet.code || '';
     downloadBase64File(fileContent, snippet.fileName || `file-${snippet.id}`);
@@ -812,14 +967,14 @@ function renderCodeList() {
         codeList.innerHTML = '<div class="empty-state">No snippets yet. Add your first snippet above!</div>';
         return;
     }
-    
+
     // Get search query
     const searchQuery = searchInput.value.trim().toLowerCase();
-    
+
     // Filter snippets based on search query
     // Supports: title, date, or both with + (e.g. "report + jan" matches title AND date)
     let filteredSnippets = codeSnippets;
-    
+
     if (searchQuery !== '') {
         // Check if using AND operator (+)
         if (searchQuery.includes('+')) {
@@ -833,49 +988,49 @@ function renderCodeList() {
             });
         } else {
             // Simple OR search (matches title OR timestamp)
-            filteredSnippets = codeSnippets.filter(snippet => 
+            filteredSnippets = codeSnippets.filter(snippet =>
                 snippet.title.toLowerCase().includes(searchQuery) ||
                 (snippet.timestamp && snippet.timestamp.toLowerCase().includes(searchQuery))
             );
         }
     }
-    
+
     // Check if no results found
     if (filteredSnippets.length === 0) {
         codeList.innerHTML = '<div class="no-results">No snippets found matching your search.</div>';
         return;
     }
-    
+
     codeList.innerHTML = filteredSnippets.map(snippet => {
         // Support both old 'code' and new 'content' properties
         const contentType = snippet.contentType || 'text';
         const rawContent = snippet.content || snippet.code || '';
         const hasStoragePath = !!snippet.storagePath;
-        
+
         // Highlight search term in title
         const highlightedTitle = searchQuery === ''
             ? escapeHtml(snippet.title)
             : highlightText(escapeHtml(snippet.title), searchQuery);
-        
+
         // Determine if content should be protected
         const isProtected = snippet.hidden && !unlockedSnippets.has(snippet.id);
-        
+
         // Get the display content (decrypted if unlocked, encrypted if locked)
         let displayContent = rawContent;
         if (snippet.isEncrypted && unlockedSnippets.has(snippet.id)) {
             displayContent = decryptedContent.get(snippet.id) || rawContent;
         }
-        
+
         // Check if file URL is loaded (for Supabase Storage files)
         const fileUrl = snippet.fileUrl || displayContent;
-        
+
         // Render content based on type
         let contentHtml = '';
         const contentClass = isProtected ? 'snippet-content protected' : 'snippet-content';
-        
+
         // Check if we have decrypted content cached for this snippet
         const hasDecryptedContent = decryptedContent.has(snippet.id);
-        
+
         if (contentType === 'image') {
             if (isProtected) {
                 contentHtml = `<div class="snippet-content protected">
@@ -939,7 +1094,7 @@ function renderCodeList() {
                 contentHtml = `<div class="code-content">${escapeHtml(displayContent)}</div>`;
             }
         }
-        
+
         // Create eye button for hidden content
         let eyeButton = '';
         if (snippet.hidden) {
@@ -953,7 +1108,7 @@ function renderCodeList() {
                 </button>`;
             }
         }
-        
+
         // Content type badge
         let typeBadge = '';
         if (contentType === 'image') {
@@ -963,7 +1118,7 @@ function renderCodeList() {
         } else {
             typeBadge = '<span class="type-badge">📝 Text</span>';
         }
-        
+
         // Action buttons
         let actionButtons = '';
         if (contentType === 'text') {
@@ -975,7 +1130,7 @@ function renderCodeList() {
                 💾 Download
             </button>`;
         }
-        
+
         return `
             <div class="code-item" data-snippet-id="${snippet.id}">
                 <div class="snippet-header">
@@ -996,12 +1151,12 @@ function renderCodeList() {
             </div>
         `;
     }).join('');
-    
+
     // Auto-load files that need URLs (non-encrypted files in storage)
     if (!isDialogOpen) {
         autoLoadFiles();
     }
-    
+
     // Render decrypted PDFs (convert data URLs to blob URLs)
     if (!isDialogOpen) {
         renderDecryptedPDFs();
@@ -1011,15 +1166,15 @@ function renderCodeList() {
 // Auto-load file URLs for non-encrypted files
 async function autoLoadFiles() {
     if (isDialogOpen) return; // Don't load while dialog is open
-    
+
     const autoLoadElements = document.querySelectorAll('[data-auto-load="true"]');
-    
+
     for (const element of autoLoadElements) {
         if (isDialogOpen) break; // Stop if dialog opens
-        
+
         const snippetId = parseInt(element.dataset.snippetId, 10);
         const snippet = codeSnippets.find(s => s.id === snippetId || s.id == snippetId);
-        
+
         if (snippet && !snippet.fileUrl) {
             // Load the URL in background
             loadFileUrl(snippetId);
@@ -1030,10 +1185,10 @@ async function autoLoadFiles() {
 // Render decrypted PDFs by converting data URLs to blob URLs
 function renderDecryptedPDFs() {
     const pdfContainers = document.querySelectorAll('[data-pdf-content]');
-    
+
     pdfContainers.forEach(container => {
         const dataUrl = decodeURIComponent(container.dataset.pdfContent);
-        
+
         // Convert data URL to blob
         try {
             const byteString = atob(dataUrl.split(',')[1]);
@@ -1045,17 +1200,17 @@ function renderDecryptedPDFs() {
             }
             const blob = new Blob([ab], { type: mimeType });
             const blobUrl = URL.createObjectURL(blob);
-            
+
             // Get the file name from the existing p element
             const fileNameEl = container.querySelector('.file-name');
             const fileName = fileNameEl ? fileNameEl.outerHTML : '';
-            
+
             // Replace container content with iframe using blob URL
             container.innerHTML = `
                 <iframe src="${blobUrl}" width="100%" height="400px" style="border: none; border-radius: 8px;"></iframe>
                 ${fileName}
             `;
-            
+
             // Remove the data attribute to prevent re-processing
             container.removeAttribute('data-pdf-content');
         } catch (e) {
@@ -1066,18 +1221,18 @@ function renderDecryptedPDFs() {
 }
 
 // Event delegation for buttons
-codeList.addEventListener('click', async function(e) {
+codeList.addEventListener('click', async function (e) {
     const button = e.target.closest('button[data-action]');
     if (!button) return;
-    
+
     const action = button.dataset.action;
     // Keep ID as string first, then try to match
     const idStr = button.dataset.id;
     const idNum = parseInt(idStr, 10);
-    
+
     // Find snippet with either string or number comparison
     let snippet = codeSnippets.find(s => s.id == idStr || s.id === idNum);
-    
+
     if (action === 'delete') {
         await deleteCode(snippet ? snippet.id : idNum);
     } else if (action === 'copy') {
@@ -1100,20 +1255,20 @@ async function loadFileUrl(snippetId) {
     // Mark as viewing when loading a file
     expandedSnippets.add(snippetId);
     isUserViewingPreview = true;
-    
+
     try {
         const response = await fetch(`/.netlify/functions/get-data?id=${snippetId}&getUrl=true`);
         if (!response.ok) {
             throw new Error('Failed to get file URL');
         }
-        
+
         const data = await response.json();
-        
+
         // Update snippet in local array with file URL
         const index = codeSnippets.findIndex(s => s.id === snippetId);
         if (index !== -1 && data.fileUrl) {
             codeSnippets[index].fileUrl = data.fileUrl;
-            
+
             // Only update the specific element instead of full re-render
             updateSnippetPreview(snippetId, data.fileUrl);
         }
@@ -1131,16 +1286,16 @@ async function loadFileUrl(snippetId) {
 function updateSnippetPreview(snippetId, fileUrl) {
     const snippet = codeSnippets.find(s => s.id == snippetId);
     if (!snippet) return;
-    
+
     const element = document.querySelector(`[data-snippet-id="${snippetId}"][data-auto-load="true"]`);
     if (!element) return;
-    
+
     // Remove auto-load attribute
     element.removeAttribute('data-auto-load');
-    
+
     const contentType = snippet.contentType || 'text';
     const fileName = snippet.fileName || 'file';
-    
+
     if (contentType === 'image') {
         element.innerHTML = `
             <img src="${fileUrl}" alt="${escapeHtml(fileName)}" style="max-width: 100%; border-radius: 8px;">
@@ -1154,7 +1309,7 @@ function updateSnippetPreview(snippetId, fileUrl) {
             </div>
         `;
     }
-    
+
     // Mark viewing complete after a short delay (let user see the content)
     setTimeout(() => {
         expandedSnippets.delete(snippetId);
@@ -1200,22 +1355,22 @@ function escapeForJS(text) {
 async function unlockContent(id) {
     const snippet = codeSnippets.find(s => s.id == id);
     if (!snippet) return;
-    
+
     const enteredPassword = showPrompt('🔒 Enter password to view content:');
-    
+
     if (enteredPassword === null) {
         return; // User cancelled
     }
-    
+
     if (enteredPassword !== snippet.password) {
         showAlert('❌ Incorrect password! Content remains hidden.');
         return;
     }
-    
+
     // Try to decrypt the content (server-side)
     if (snippet.isEncrypted) {
         let rawContent = snippet.content || snippet.code || '';
-        
+
         // If content is empty and it's an encrypted file in storage
         if (!rawContent && snippet.storagePath) {
             // Show loading indicator
@@ -1223,7 +1378,7 @@ async function unlockContent(id) {
             loadingDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);color:white;padding:20px 40px;border-radius:10px;z-index:10000;';
             loadingDiv.textContent = '📥 Downloading encrypted file...';
             document.body.appendChild(loadingDiv);
-            
+
             try {
                 // Fetch encrypted file content from storage
                 const response = await fetch(`/.netlify/functions/get-data?id=${snippet.id}&getContent=true`);
@@ -1233,28 +1388,28 @@ async function unlockContent(id) {
                     showAlert('❌ Failed to download encrypted file: ' + (err.error || 'Unknown error'));
                     return;
                 }
-                
+
                 const data = await response.json();
                 rawContent = data.content;
-                
+
                 if (!rawContent) {
                     loadingDiv.remove();
                     showAlert('❌ No encrypted content found in file');
                     return;
                 }
-                
+
                 loadingDiv.textContent = '🔓 Decrypting...';
-                
+
                 // Decrypt the file content
                 const decrypted = await decryptContent(rawContent, enteredPassword);
-                
+
                 loadingDiv.remove();
-                
+
                 if (!decrypted) {
                     showAlert('❌ Failed to decrypt file! Incorrect password or corrupted data.');
                     return;
                 }
-                
+
                 // console.log('Decrypted content preview:', decrypted.substring(0, 100));
                 // Cache the decrypted content (this is now base64 of the original file)
                 decryptedContent.set(id, decrypted);
@@ -1270,7 +1425,7 @@ async function unlockContent(id) {
                 return;
             }
         }
-        
+
         // Text content - decrypt normally
         if (rawContent) {
             // Show loading indicator
@@ -1278,11 +1433,11 @@ async function unlockContent(id) {
             loadingDiv.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);color:white;padding:20px 40px;border-radius:10px;z-index:10000;';
             loadingDiv.textContent = '🔓 Decrypting...';
             document.body.appendChild(loadingDiv);
-            
+
             const decrypted = await decryptContent(rawContent, enteredPassword);
-            
+
             loadingDiv.remove();
-            
+
             if (!decrypted) {
                 showAlert('❌ Failed to decrypt! Content remains hidden.');
                 return;
@@ -1291,13 +1446,13 @@ async function unlockContent(id) {
             decryptedContent.set(id, decrypted);
         }
     }
-    
+
     // Unlock this snippet for this session
     unlockedSnippets.add(id);
     expandedSnippets.add(id); // Track as viewing
     isUserViewingPreview = true;
     renderCodeList();
-    
+
     // Clear viewing state after user has seen content (30 seconds)
     setTimeout(() => {
         expandedSnippets.delete(id);
@@ -1344,9 +1499,9 @@ async function saveToDatabaseJSON() {
             saveQueue.push({ resolve, reject });
         });
     }
-    
+
     isSaving = true;
-    
+
     try {
         const response = await fetch('/.netlify/functions/save-data', {
             method: 'POST',
@@ -1355,18 +1510,18 @@ async function saveToDatabaseJSON() {
             },
             body: JSON.stringify(codeSnippets)
         });
-        
+
         if (!response.ok) {
             const errorText = await response.text();
             throw new Error(`Failed to save data: ${errorText}`);
         }
-        
+
         // Process queued saves
         if (saveQueue.length > 0) {
             const queued = saveQueue.slice();
             saveQueue = [];
             isSaving = false;
-            
+
             // Save again with the latest data
             try {
                 await saveToDatabaseJSON();
@@ -1387,10 +1542,10 @@ async function saveToDatabaseJSON() {
 async function loadFromDatabaseJSON() {
     try {
         const response = await fetch('/.netlify/functions/get-data');
-        
+
         if (response.ok) {
             const data = await response.json();
-            
+
             // Handle paginated response
             let snippetsArray = [];
             if (data.snippets) {
@@ -1398,7 +1553,7 @@ async function loadFromDatabaseJSON() {
             } else if (Array.isArray(data)) {
                 snippetsArray = data;
             }
-            
+
             if (snippetsArray.length > 0) {
                 // Normalize IDs to numbers to ensure consistency
                 codeSnippets = snippetsArray.map(snippet => ({
@@ -1440,13 +1595,13 @@ async function checkForUpdates() {
         // console.log('Skipping auto-update: user is viewing content');
         return;
     }
-    
+
     try {
         const response = await fetch('/.netlify/functions/get-data');
-        
+
         if (response.ok) {
             const data = await response.json();
-            
+
             // Handle paginated response
             let snippetsArray = [];
             if (data.snippets) {
@@ -1454,16 +1609,16 @@ async function checkForUpdates() {
             } else if (Array.isArray(data)) {
                 snippetsArray = data;
             }
-            
+
             // Normalize IDs to numbers
             const normalizedData = snippetsArray.map(snippet => ({
                 ...snippet,
                 id: typeof snippet.id === 'string' ? parseInt(snippet.id, 10) : snippet.id
             }));
-            
+
             // Calculate hash of new data
             const newHash = generateDataHash(normalizedData);
-            
+
             // Check if data has changed
             if (lastUpdateHash !== null && newHash !== lastUpdateHash) {
                 // Data has changed - check if user is viewing anything
@@ -1473,18 +1628,18 @@ async function checkForUpdates() {
                     // console.log('Data changed but user is viewing - queuing refresh');
                     return;
                 }
-                
+
                 // Data has changed - update the UI
                 const oldLength = codeSnippets.length;
                 const change = normalizedData.length - oldLength;
-                
+
                 // Preserve file URLs for loaded content
                 preserveFileUrls(normalizedData);
-                
+
                 codeSnippets = normalizedData;
                 lastUpdateHash = newHash;
                 smartRenderCodeList();
-                
+
                 // Show notification only if there's a meaningful change
                 if (change !== 0) {
                     showUpdateNotification(change);
@@ -1513,10 +1668,10 @@ function preserveFileUrls(newSnippets) {
 function smartRenderCodeList() {
     // Save scroll position
     const scrollPos = window.scrollY;
-    
+
     // Render the list
     renderCodeList();
-    
+
     // Restore scroll position
     window.scrollTo(0, scrollPos);
 }
@@ -1538,17 +1693,17 @@ function showUpdateNotification(change) {
         font-size: 14px;
         animation: slideIn 0.3s ease-out;
     `;
-    
+
     let message = '🔄 Data updated';
     if (change > 0) {
         message += ` (+${change} new)`;
     } else if (change < 0) {
         message += ` (${Math.abs(change)} removed)`;
     }
-    
+
     notificationDiv.textContent = message;
     document.body.appendChild(notificationDiv);
-    
+
     // Add slide-in animation
     const style = document.createElement('style');
     style.textContent = `
@@ -1564,7 +1719,7 @@ function showUpdateNotification(change) {
         }
     `;
     document.head.appendChild(style);
-    
+
     setTimeout(() => {
         notificationDiv.style.opacity = '0';
         notificationDiv.style.transform = 'translateX(400px)';
@@ -1582,13 +1737,13 @@ function startAutoUpdate(intervalMs = 5000) {
     if (autoUpdateInterval) {
         clearInterval(autoUpdateInterval);
     }
-    
+
     // Set initial hash
     lastUpdateHash = generateDataHash(codeSnippets);
-    
+
     // Start checking for updates every intervalMs (default: 5 seconds)
     autoUpdateInterval = setInterval(checkForUpdates, intervalMs);
-    
+
     // Update indicator
     updateIndicatorStatus(true);
     // console.log(`Auto-update started (checking every ${intervalMs / 1000}s)`);
@@ -1599,7 +1754,7 @@ function stopAutoUpdate() {
     if (autoUpdateInterval) {
         clearInterval(autoUpdateInterval);
         autoUpdateInterval = null;
-        
+
         // Update indicator
         updateIndicatorStatus(false);
         // console.log('Auto-update stopped');
@@ -1610,10 +1765,10 @@ function stopAutoUpdate() {
 function updateIndicatorStatus(isActive) {
     const indicator = document.getElementById('autoUpdateIndicator');
     if (!indicator) return;
-    
+
     const dot = indicator.querySelector('.pulse-dot');
     const text = indicator.querySelector('.indicator-text');
-    
+
     if (isActive) {
         dot.style.background = '#4CAF50';
         text.textContent = 'Live';

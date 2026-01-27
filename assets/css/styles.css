@@ -1470,3 +1470,166 @@ h1 {
         background: #666;
     }
 }
+
+/* ===== Custom Password Modal (Native Browser Prompt Style) ===== */
+.password-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.password-modal {
+    background: #2b2b2b;
+    border-radius: 12px;
+    padding: 0;
+    width: 90%;
+    max-width: 420px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.password-modal-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid #404040;
+}
+
+.password-modal-site {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e0e0e0;
+    margin-bottom: 12px;
+}
+
+.password-modal-title {
+    font-size: 14px;
+    font-weight: 400;
+    color: #ccc;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+
+.password-modal-body {
+    padding: 16px 20px 20px;
+}
+
+.password-modal-input {
+    width: 100%;
+    padding: 8px 0;
+    border: none;
+    border-bottom: 2px solid #4285f4;
+    border-radius: 0;
+    font-size: 16px;
+    background: transparent;
+    color: #fff;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.password-modal-input::placeholder {
+    color: #888;
+}
+
+.password-modal-input:focus {
+    border-bottom-color: #4285f4;
+}
+
+.password-modal-error {
+    color: #ff6b6b;
+    font-size: 13px;
+    margin-top: 8px;
+    display: none;
+}
+
+.password-modal-error.show {
+    display: block;
+}
+
+.password-modal-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 20px 16px;
+}
+
+.password-modal-btn {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    min-height: 36px;
+}
+
+.password-modal-btn-cancel {
+    background: #404040;
+    color: #e0e0e0;
+}
+
+.password-modal-btn-cancel:hover {
+    background: #505050;
+}
+
+.password-modal-btn-submit {
+    background: #4285f4;
+    color: white;
+}
+
+.password-modal-btn-submit:hover {
+    background: #3275e4;
+}
+
+.password-modal-btn-submit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Light mode variant */
+@media (prefers-color-scheme: light) {
+    .password-modal {
+        background: #fff;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    }
+
+    .password-modal-header {
+        border-bottom-color: #e0e0e0;
+    }
+
+    .password-modal-site {
+        color: #333;
+    }
+
+    .password-modal-title {
+        color: #555;
+    }
+
+    .password-modal-input {
+        color: #333;
+        border-bottom-color: #4285f4;
+    }
+
+    .password-modal-input::placeholder {
+        color: #999;
+    }
+
+    .password-modal-btn-cancel {
+        background: #e8e8e8;
+        color: #333;
+    }
+
+    .password-modal-btn-cancel:hover {
+        background: #d8d8d8;
+    }
+}
