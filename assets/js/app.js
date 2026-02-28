@@ -50,7 +50,7 @@ async function getSupabaseClient() {
     }
 }
 
-// Upload file directly to Supabase Storage (bypasses Netlify 6MB limit)
+// Upload file directly to Supabase Storage
 async function uploadFileDirectly(file, snippetId) {
     const client = await getSupabaseClient();
     if (!client) {
@@ -92,7 +92,124 @@ function showAlert(message) {
     isDialogOpen = false;
 }
 
-// ===== Server-Side Encryption/Decryption Functions =====
+// ===== Client-Side Encryption/Decryption (WebCrypto AES-256-GCM) =====
+// Compatible with server-side crypto.js format: base64(salt[32] + iv[16] + tag[16] + ciphertext)
+
+const CRYPTO_ITERATIONS = 100000;
+const CRYPTO_SALT_LENGTH = 32;
+const CRYPTO_IV_LENGTH = 16;
+const CRYPTO_TAG_LENGTH = 16;
+const CRYPTO_KEY_LENGTH = 32; // 256 bits
+
+// Derive AES key from password using PBKDF2 (matches server's sha512/100000 iter)
+async function deriveKeyClient(password, salt) {
+    const enc = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+        'raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']
+    );
+    return crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt: salt, iterations: CRYPTO_ITERATIONS, hash: 'SHA-512' },
+        keyMaterial,
+        { name: 'AES-GCM', length: CRYPTO_KEY_LENGTH * 8 },
+        false,
+        ['encrypt', 'decrypt']
+    );
+}
+
+// Client-side encrypt: returns base64 string (same format as server)
+async function encryptContentClient(text, password) {
+    try {
+        const enc = new TextEncoder();
+        const salt = crypto.getRandomValues(new Uint8Array(CRYPTO_SALT_LENGTH));
+        const iv = crypto.getRandomValues(new Uint8Array(CRYPTO_IV_LENGTH));
+        const key = await deriveKeyClient(password, salt);
+
+        // AES-GCM encrypt (tag is appended to ciphertext by WebCrypto)
+        const cipherBuf = await crypto.subtle.encrypt(
+            { name: 'AES-GCM', iv: iv, tagLength: CRYPTO_TAG_LENGTH * 8 },
+            key,
+            enc.encode(text)
+        );
+
+        // WebCrypto returns ciphertext+tag concatenated; split them
+        const cipherArr = new Uint8Array(cipherBuf);
+        const ciphertext = cipherArr.slice(0, cipherArr.length - CRYPTO_TAG_LENGTH);
+        const tag = cipherArr.slice(cipherArr.length - CRYPTO_TAG_LENGTH);
+
+        // Combine: salt + iv + tag + ciphertext (matches server format)
+        const combined = new Uint8Array(salt.length + iv.length + tag.length + ciphertext.length);
+        combined.set(salt, 0);
+        combined.set(iv, salt.length);
+        combined.set(tag, salt.length + iv.length);
+        combined.set(ciphertext, salt.length + iv.length + tag.length);
+
+        return btoa(String.fromCharCode(...combined));
+    } catch (e) {
+        return null;
+    }
+}
+
+// Client-side encrypt raw bytes: returns encrypted Uint8Array (for file uploads)
+async function encryptBytesClient(uint8Array, password) {
+    const salt = crypto.getRandomValues(new Uint8Array(CRYPTO_SALT_LENGTH));
+    const iv = crypto.getRandomValues(new Uint8Array(CRYPTO_IV_LENGTH));
+    const key = await deriveKeyClient(password, salt);
+
+    const cipherBuf = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: iv, tagLength: CRYPTO_TAG_LENGTH * 8 },
+        key,
+        uint8Array
+    );
+
+    const cipherArr = new Uint8Array(cipherBuf);
+    const ciphertext = cipherArr.slice(0, cipherArr.length - CRYPTO_TAG_LENGTH);
+    const tag = cipherArr.slice(cipherArr.length - CRYPTO_TAG_LENGTH);
+
+    const combined = new Uint8Array(salt.length + iv.length + tag.length + ciphertext.length);
+    combined.set(salt, 0);
+    combined.set(iv, salt.length);
+    combined.set(tag, salt.length + iv.length);
+    combined.set(ciphertext, salt.length + iv.length + tag.length);
+
+    return combined;
+}
+
+// Client-side decrypt raw bytes: returns decrypted Uint8Array
+async function decryptBytesClient(combined, password) {
+    const salt = combined.slice(0, CRYPTO_SALT_LENGTH);
+    const iv = combined.slice(CRYPTO_SALT_LENGTH, CRYPTO_SALT_LENGTH + CRYPTO_IV_LENGTH);
+    const tag = combined.slice(CRYPTO_SALT_LENGTH + CRYPTO_IV_LENGTH, CRYPTO_SALT_LENGTH + CRYPTO_IV_LENGTH + CRYPTO_TAG_LENGTH);
+    const ciphertext = combined.slice(CRYPTO_SALT_LENGTH + CRYPTO_IV_LENGTH + CRYPTO_TAG_LENGTH);
+
+    const key = await deriveKeyClient(password, salt);
+
+    // WebCrypto expects ciphertext+tag
+    const cipherWithTag = new Uint8Array(ciphertext.length + tag.length);
+    cipherWithTag.set(ciphertext, 0);
+    cipherWithTag.set(tag, ciphertext.length);
+
+    const plainBuf = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: iv, tagLength: CRYPTO_TAG_LENGTH * 8 },
+        key,
+        cipherWithTag
+    );
+
+    return new Uint8Array(plainBuf);
+}
+
+// Client-side decrypt base64 string: returns plaintext string
+async function decryptContentClient(encryptedBase64, password) {
+    try {
+        const raw = atob(encryptedBase64);
+        const combined = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) combined[i] = raw.charCodeAt(i);
+
+        const plainBytes = await decryptBytesClient(combined, password);
+        return new TextDecoder().decode(plainBytes);
+    } catch (e) {
+        return null;
+    }
+}
 
 // Legacy XOR decryption for backward compatibility with old encrypted content
 function legacyDecrypt(encryptedText, password) {
@@ -113,8 +230,13 @@ function legacyDecrypt(encryptedText, password) {
     }
 }
 
-// Encrypt content using server-side API (AES-256-GCM)
+// Encrypt content (client-side WebCrypto, with server fallback)
 async function encryptContent(text, password) {
+    // Try client-side first (no size limit, no Netlify dependency)
+    const clientResult = await encryptContentClient(text, password);
+    if (clientResult) return clientResult;
+
+    // Fallback to server-side
     try {
         const response = await fetch('/.netlify/functions/crypto', {
             method: 'POST',
@@ -129,26 +251,27 @@ async function encryptContent(text, password) {
         const data = await response.json();
 
         if (!response.ok || !data.success) {
-            // console.error('Encryption failed:', data.error);
             return null;
         }
 
         return data.encrypted;
     } catch (e) {
-        // console.error('Encryption error:', e);
         return null;
     }
 }
 
-// Decrypt content using server-side API (with fallback to legacy XOR)
+// Decrypt content (client-side WebCrypto first, then server, then legacy XOR)
 async function decryptContent(encryptedText, password) {
     // Guard against empty content
     if (!encryptedText || encryptedText.trim() === '') {
-        // console.error('Cannot decrypt: content is empty');
         return null;
     }
 
-    // First, try server-side AES decryption
+    // 1. Try client-side AES-256-GCM decryption
+    const clientResult = await decryptContentClient(encryptedText, password);
+    if (clientResult) return clientResult;
+
+    // 2. Try server-side AES decryption
     try {
         const response = await fetch('/.netlify/functions/crypto', {
             method: 'POST',
@@ -166,10 +289,10 @@ async function decryptContent(encryptedText, password) {
             return data.decrypted;
         }
     } catch (e) {
-        // console.error('Server decryption error:', e);
+        // Server unavailable
     }
 
-    // Fallback to legacy XOR decryption for old content
+    // 3. Fallback to legacy XOR decryption for old content
     const legacyResult = legacyDecrypt(encryptedText, password);
     if (legacyResult) {
         return legacyResult;
@@ -335,10 +458,10 @@ async function addCode() {
             return;
         }
 
-        // For non-encrypted files, upload directly to Supabase Storage (bypasses 6MB limit)
-        // For encrypted files, read as base64 and send through Netlify
+        // For non-encrypted files, upload directly to Supabase Storage
+        // For encrypted files, read as base64 and encrypt via server
         if (!hideContent) {
-            // DIRECT UPLOAD - bypasses Netlify 6MB limit
+            // DIRECT UPLOAD to Supabase Storage
             addBtn.disabled = true;
             addBtn.textContent = 'Uploading...';
 
@@ -395,25 +518,89 @@ async function addCode() {
                 return;
             }
         } else {
-            // ENCRYPTED FILE - must go through Netlify (has 6MB limit)
-            // Check file size first
-            const fileSizeMB = selectedFile.size / (1024 * 1024);
-            if (fileSizeMB > 4) { // Leave margin for base64 expansion
-                showAlert(`⚠️ Encrypted files must be under 4MB (yours is ${fileSizeMB.toFixed(1)}MB).\n\nFor larger files, disable "Hide Content" to upload without encryption.`);
-                return;
-            }
+            // ENCRYPTED FILE - encrypt client-side, upload directly to Supabase (no size limit)
+            addBtn.disabled = true;
+            addBtn.textContent = 'Encrypting...';
 
-            // Read file as base64 for encryption
             try {
-                content = await readFileAsBase64(selectedFile);
+                const snippetId = Date.now();
+
+                // Read file as raw bytes
+                const fileBytes = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(new Uint8Array(reader.result));
+                    reader.onerror = reject;
+                    reader.readAsArrayBuffer(selectedFile);
+                });
+
+                // Encrypt bytes client-side
+                const encryptedBytes = await encryptBytesClient(fileBytes, password);
+
+                // Upload encrypted blob directly to Supabase Storage
+                addBtn.textContent = 'Uploading encrypted file...';
+                const client = await getSupabaseClient();
+                if (!client) throw new Error('Supabase client not available');
+
+                const bucket = supabaseConfig.storageBucket || 'code-files';
+                const ext = selectedFile.name.split('.').pop() || 'bin';
+                const encStoragePath = `${snippetId}/${Date.now()}.${ext}.enc`;
+
+                const encBlob = new Blob([encryptedBytes], { type: 'application/octet-stream' });
+                const { error: upErr } = await client.storage
+                    .from(bucket)
+                    .upload(encStoragePath, encBlob, {
+                        contentType: 'application/octet-stream',
+                        upsert: true
+                    });
+
+                if (upErr) throw new Error(`Upload failed: ${upErr.message}`);
+
+                // Save metadata only via Netlify (tiny payload)
+                addBtn.textContent = 'Saving...';
+                const snippet = {
+                    id: snippetId,
+                    title: title,
+                    contentType: contentType,
+                    content: null, // no content in DB
+                    storagePath: encStoragePath,
+                    fileName: selectedFile.name,
+                    fileType: selectedFile.type,
+                    password: password,
+                    timestamp: new Date().toLocaleString(),
+                    hidden: true,
+                    isEncrypted: true
+                };
+
+                const response = await fetch('/.netlify/functions/save-data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ snippet: snippet })
+                });
+
+                if (!response.ok) throw new Error('Failed to save metadata');
+
+                const result = await response.json();
+                const savedSnippet = result.snippet || snippet;
+                codeSnippets.unshift(savedSnippet);
+
+                addBtn.disabled = false;
+                addBtn.textContent = 'Add Snippet';
+
+                resetForm();
+                renderCodeList();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+
             } catch (error) {
-                showAlert('Failed to read file!');
+                showAlert('⚠️ Failed to upload encrypted file: ' + error.message);
+                addBtn.disabled = false;
+                addBtn.textContent = 'Add Snippet';
                 return;
             }
         }
     }
 
-    // Encrypt content if hidden (using server-side encryption)
+    // Encrypt content if hidden (client-side AES-256-GCM, server fallback)
     let finalContent = content;
     if (hideContent) {
         addBtn.disabled = true;
@@ -441,7 +628,7 @@ async function addCode() {
         isEncrypted: hideContent
     };
 
-    // Save to database (encrypted files uploaded through Netlify)
+    // Save to database (text snippets only reach here; files handled above)
     try {
         addBtn.disabled = true;
         addBtn.textContent = contentType === 'text' ? 'Saving...' : 'Uploading...';
@@ -869,6 +1056,37 @@ async function downloadFile(id) {
                 document.body.appendChild(loadingDiv);
 
                 try {
+                    // Check if this is a new-style .enc blob (encrypted client-side)
+                    if (snippet.storagePath.endsWith('.enc')) {
+                        // Get signed URL and download encrypted blob directly
+                        const urlRes = await fetch(`/.netlify/functions/get-data?id=${id}&getUrl=true`);
+                        if (!urlRes.ok) throw new Error('Failed to get file URL');
+                        const urlData = await urlRes.json();
+                        if (!urlData.fileUrl) throw new Error('No file URL returned');
+
+                        const blobRes = await fetch(urlData.fileUrl);
+                        if (!blobRes.ok) throw new Error('Failed to download file');
+                        const encryptedBytes = new Uint8Array(await blobRes.arrayBuffer());
+
+                        loadingDiv.textContent = '🔓 Decrypting...';
+                        const decryptedBytes = await decryptBytesClient(encryptedBytes, enteredPassword);
+
+                        // Create download from raw bytes
+                        const blob = new Blob([decryptedBytes], { type: snippet.fileType || 'application/octet-stream' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = snippet.fileName || `file-${snippet.id}`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(url);
+
+                        loadingDiv.remove();
+                        return;
+                    }
+
+                    // Old-style: encrypted content stored in DB, fetch via getContent
                     const response = await fetch(`/.netlify/functions/get-data?id=${id}&getContent=true`);
                     if (!response.ok) {
                         loadingDiv.remove();
@@ -1380,7 +1598,38 @@ async function unlockContent(id) {
             document.body.appendChild(loadingDiv);
 
             try {
-                // Fetch encrypted file content from storage
+                // New-style .enc blob: download from storage + decrypt client-side
+                if (snippet.storagePath.endsWith('.enc')) {
+                    const urlRes = await fetch(`/.netlify/functions/get-data?id=${snippet.id}&getUrl=true`);
+                    if (!urlRes.ok) throw new Error('Failed to get file URL');
+                    const urlData = await urlRes.json();
+                    if (!urlData.fileUrl) throw new Error('No file URL returned');
+
+                    const blobRes = await fetch(urlData.fileUrl);
+                    if (!blobRes.ok) throw new Error('Failed to download file');
+                    const encryptedBytes = new Uint8Array(await blobRes.arrayBuffer());
+
+                    loadingDiv.textContent = '🔓 Decrypting...';
+                    const decryptedBytes = await decryptBytesClient(encryptedBytes, enteredPassword);
+
+                    // Convert to base64 data URL for preview
+                    const blob = new Blob([decryptedBytes], { type: snippet.fileType || 'application/octet-stream' });
+                    const dataUrl = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.readAsDataURL(blob);
+                    });
+
+                    loadingDiv.remove();
+                    decryptedContent.set(id, dataUrl);
+                    unlockedSnippets.add(id);
+                    expandedSnippets.add(id);
+                    isUserViewingPreview = true;
+                    renderCodeList();
+                    return;
+                }
+
+                // Old-style: encrypted content stored in DB via Netlify
                 const response = await fetch(`/.netlify/functions/get-data?id=${snippet.id}&getContent=true`);
                 if (!response.ok) {
                     loadingDiv.remove();

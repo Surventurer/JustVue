@@ -30,7 +30,9 @@ JustVue is a modern, secure snippet manager designed to store your code snippets
 
 - **🔒 Security & Privacy**
   - **Password Protection**: Secure individual snippets with a password.
-  - **Encryption**: Content can be encrypted server-side (AES-256-GCM) before storage.
+  - **Client-Side Encryption**: Content is encrypted in the browser using AES-256-GCM (WebCrypto API) before upload — your unencrypted data and password never leave the browser.
+  - **No Size Limits**: Encrypted files are uploaded directly to Supabase Storage as encrypted blobs, bypassing any server body-size restrictions.
+  - **Backward Compatible**: Supports decryption of older server-encrypted and legacy XOR-encrypted content.
   - **Hide Content**: Toggle visibility of sensitive snippets.
   - **Security Headers**: X-Frame-Options, X-Content-Type-Options, and Referrer-Policy for enhanced protection.
 
@@ -55,11 +57,12 @@ flowchart TD
     subgraph Frontend ["Frontend Layer"]
         UI
         Logic["App Logic / State"]
+        Crypto["🔐 WebCrypto AES-256-GCM"]
     end
     
     subgraph Backend ["Serverless Layer - Netlify"]
         Config["⚙️ config"]
-        Crypto["🔐 crypto"]
+        ServerCrypto["🔐 crypto (legacy fallback)"]
         Save["💾 save-data"]
         Get["🔍 get-data"]
     end
@@ -72,11 +75,11 @@ flowchart TD
     UI -->|Init| Config
     UI -->|Input| Logic
     
-    Logic -->|Save Text OR Hidden Content| Save
-    Logic -->|Upload Public Files| Storage
-    Logic -->|Save File Metadata| Save
+    Logic -->|Encrypt/Decrypt in Browser| Crypto
+    Logic -->|Upload Files (plain & encrypted)| Storage
+    Logic -->|Save Text & Metadata| Save
     
-    Logic -->|Encrypt/Decrypt Data| Crypto
+    Logic -->|Legacy Decrypt Fallback| ServerCrypto
     
     Save -->|Persist| DB
     Get -->|Query| DB
@@ -87,7 +90,7 @@ flowchart TD
 
 ## Tech Stack
 
-- **Frontend**: HTML5, CSS3, Vanilla JavaScript
+- **Frontend**: HTML5, CSS3, Vanilla JavaScript, WebCrypto API
 - **Backend**: Supabase (PostgreSQL, Storage)
 - **Serverless**: Netlify Functions (Node.js)
 
