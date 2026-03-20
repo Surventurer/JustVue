@@ -76,8 +76,8 @@ flowchart TD
     UI -->|Input| Logic
     
     Logic -->|Encrypt/Decrypt in Browser| Crypto
-    Logic -->|Upload Files (plain & encrypted)| Storage
-    Logic -->|Save Text & Metadata| Save
+    Logic -->|Upload Files plain and encrypted| Storage
+    Logic -->|Save Text and Metadata| Save
     
     Logic -->|Legacy Decrypt Fallback| ServerCrypto
     
