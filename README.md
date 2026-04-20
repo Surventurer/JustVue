@@ -27,6 +27,7 @@ JustVue is a modern, secure snippet manager designed to store your code snippets
   - Text & Code Snippets
   - Images (Direct upload to Supabase Storage)
   - PDF Documents
+  - ZIP Archives
 
 - **🔒 Security & Privacy**
   - **Password Protection**: Secure individual snippets with a password.
@@ -154,7 +155,7 @@ This will start a local server (usually at `http://localhost:8888`) that mimics 
 
 1.  **Add a Snippet**:
     *   Enter a **Title** and **Password**.
-    *   Select Type: Text, Image, or PDF.
+    *   Select Type: Text, Image, PDF, or ZIP.
     *   Paste your code/text or select a file.
     *   (Optional) Check "Hide This Content" to encrypt it.
     *   Click **Add Snippet**.

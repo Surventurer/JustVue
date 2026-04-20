@@ -85,8 +85,8 @@ exports.handler = async function(event, context) {
         };
       }
       
-      // If it's a file (image/PDF) with content, upload to storage first
-      if ((snippet.contentType === 'image' || snippet.contentType === 'pdf') && snippet.content) {
+      // If it's a file (image/PDF/ZIP) with content, upload to storage first
+      if ((snippet.contentType === 'image' || snippet.contentType === 'pdf' || snippet.contentType === 'zip') && snippet.content) {
         const storagePath = await uploadFile(
           snippet.content,
           snippet.fileName || `file-${snippet.id}`,

@@ -93,12 +93,16 @@
                     <input type="radio" name="contentType" value="pdf">
                     <span>📄 PDF</span>
                 </label>
+                <label class="type-option">
+                    <input type="radio" name="contentType" value="zip">
+                    <span>🗜️ ZIP</span>
+                </label>
             </div>
             
             <textarea id="codeInput" placeholder="Enter your text/code here..." aria-label="Snippet content"></textarea>
             
             <div id="fileUploadArea" style="display:none;">
-                <input type="file" id="fileInput" accept="image/*,.pdf" style="display:none;">
+                <input type="file" id="fileInput" accept="image/*,.pdf,.zip" style="display:none;">
                 <button type="button" id="fileSelectBtn" class="btn btn-file-select">
                     📁 Choose File
                 </button>
@@ -125,6 +129,8 @@
 
     <!-- Supabase Client for Direct Uploads -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- JSZip for ZIP previews -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <!-- Main Application -->
     <script src="assets/js/app.js"></script>
 </body>

@@ -360,6 +360,13 @@ function handleFileSelect(e) {
                     <button type="button" onclick="clearFileSelection()" class="btn-clear-file">✕ Remove</button>
                 </div>
             `;
+        } else if (file.type === 'application/zip' || file.type === 'application/x-zip-compressed' || file.name.endsWith('.zip')) {
+            filePreview.innerHTML = `
+                <div class="file-preview-container">
+                    <p>🗜️ ${file.name} (${(file.size / 1024).toFixed(2)} KB)</p>
+                    <button type="button" onclick="clearFileSelection()" class="btn-clear-file">✕ Remove</button>
+                </div>
+            `;
         }
     };
     reader.readAsDataURL(file);
@@ -380,7 +387,22 @@ function updateInputVisibility() {
     } else {
         codeInput.style.display = 'none';
         fileUploadArea.style.display = 'block';
-        fileInput.accept = selectedContentType === 'image' ? 'image/*' : '.pdf';
+        fileInput.accept = selectedContentType === 'image' ? 'image/*' : selectedContentType === 'pdf' ? '.pdf' : '.zip';
+        
+        if (selectedFile) {
+            let isValid = false;
+            if (selectedContentType === 'image' && selectedFile.type.startsWith('image/')) {
+                isValid = true;
+            } else if (selectedContentType === 'pdf' && selectedFile.type === 'application/pdf') {
+                isValid = true;
+            } else if (selectedContentType === 'zip' && (selectedFile.type === 'application/zip' || selectedFile.type === 'application/x-zip-compressed' || selectedFile.name.endsWith('.zip'))) {
+                isValid = true;
+            }
+            
+            if (!isValid) {
+                clearFileSelection();
+            }
+        }
     }
 }
 
@@ -452,7 +474,7 @@ async function addCode() {
             return;
         }
         content = code;
-    } else if (contentType === 'image' || contentType === 'pdf') {
+    } else if (contentType === 'image' || contentType === 'pdf' || contentType === 'zip') {
         if (!selectedFile) {
             showAlert('Please select a file!');
             return;
@@ -1304,6 +1326,32 @@ function renderCodeList() {
                     </div>
                 </div>`;
             }
+        } else if (contentType === 'zip') {
+            if (isProtected) {
+                contentHtml = `<div class="snippet-content protected">
+                    <div>🔒 ZIP is hidden</div>
+                </div>`;
+            } else if (hasDecryptedContent) {
+                // Decrypted ZIP content available - parse from the decrypted data URL
+                contentHtml = `<div class="snippet-content">
+                    <div id="zip-list-${snippet.id}" data-zip-url="${encodeURIComponent(displayContent)}" style="margin-bottom: 15px; width: 100%;">
+                        <div class="loading-text" style="font-size: 13px;">⏳ Reading contents...</div>
+                    </div>
+                    <p class="file-name">🗜️ ${escapeHtml(snippet.fileName || 'Archive.zip')}</p>
+                </div>`;
+            } else if (hasStoragePath && !snippet.fileUrl) {
+                contentHtml = `<div class="snippet-content" data-snippet-id="${snippet.id}" data-auto-load="true">
+                    <div class="loading-text" style="margin-bottom: 15px;">⏳ Loading ZIP...</div>
+                    <p class="file-name">🗜️ ${escapeHtml(snippet.fileName || 'Archive.zip')}</p>
+                </div>`;
+            } else {
+                contentHtml = `<div class="snippet-content">
+                    <div id="zip-list-${snippet.id}" data-zip-url="${encodeURIComponent(fileUrl)}" style="margin-bottom: 15px; width: 100%;">
+                        <div class="loading-text" style="font-size: 13px;">⏳ Reading contents...</div>
+                    </div>
+                    <p class="file-name">🗜️ ${escapeHtml(snippet.fileName || 'Archive.zip')}</p>
+                </div>`;
+            }
         } else {
             // Text/code content
             if (isProtected) {
@@ -1333,6 +1381,8 @@ function renderCodeList() {
             typeBadge = '<span class="type-badge">🖼️ Image</span>';
         } else if (contentType === 'pdf') {
             typeBadge = '<span class="type-badge">📄 PDF</span>';
+        } else if (contentType === 'zip') {
+            typeBadge = '<span class="type-badge">🗜️ ZIP</span>';
         } else {
             typeBadge = '<span class="type-badge">📝 Text</span>';
         }
@@ -1378,6 +1428,7 @@ function renderCodeList() {
     // Render decrypted PDFs (convert data URLs to blob URLs)
     if (!isDialogOpen) {
         renderDecryptedPDFs();
+        renderZipPreviews();
     }
 }
 
@@ -1434,6 +1485,52 @@ function renderDecryptedPDFs() {
         } catch (e) {
             // console.error('Failed to render PDF:', e);
             container.innerHTML = `<div style="color: red;">❌ Failed to render PDF</div>`;
+        }
+    });
+}
+
+function renderZipPreviews() {
+    if (!window.JSZip || typeof JSZip === 'undefined') {
+        const containers = document.querySelectorAll('[data-zip-url]');
+        containers.forEach(container => {
+            container.innerHTML = '<div style="color: #e53e3e; font-size: 13px;">❌ JSZip library is missing</div>';
+        });
+        return;
+    }
+    
+    document.querySelectorAll('[data-zip-url]').forEach(async container => {
+        const fileUrl = decodeURIComponent(container.dataset.zipUrl);
+        container.removeAttribute('data-zip-url');
+        
+        try {
+            let zipData;
+            if (fileUrl.startsWith('data:')) {
+                zipData = fileUrl.split(',')[1]; // Base64
+            } else {
+                const res = await fetch(fileUrl);
+                if (!res.ok) throw new Error('Fetch failed');
+                zipData = await res.blob();
+            }
+
+            const zip = new JSZip();
+            const loadedZip = await zip.loadAsync(zipData, {base64: typeof zipData === 'string'});
+            
+            let fileListHtml = '<ul style="text-align: left; font-size: 14px; line-height: 1.6; max-height: 400px; overflow-y: auto; background: rgba(0,0,0,0.03); padding: 15px; margin: 0; border-radius: 8px; list-style-type: none; border: 1px solid rgba(0,0,0,0.1); box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);">';
+            let fileCount = 0;
+            
+            loadedZip.forEach((relativePath, zipEntry) => {
+                const icon = zipEntry.dir ? '📁' : '📄';
+                fileListHtml += `<li style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;"><span style="font-size: 16px;">${icon}</span> <span>${escapeHtml(relativePath)}</span></li>`;
+                fileCount++;
+            });
+            
+            if (fileCount === 0) {
+                fileListHtml += `<li><em>Archive is empty</em></li>`;
+            }
+            fileListHtml += '</ul>';
+            container.innerHTML = fileListHtml;
+        } catch(err) {
+            container.innerHTML = `<div style="color: #e53e3e; font-size: 13px;">❌ Preview failed: ${escapeHtml(err.message)}</div>`;
         }
     });
 }
@@ -1526,6 +1623,14 @@ function updateSnippetPreview(snippetId, fileUrl) {
                 <p class="file-name">📄 ${escapeHtml(fileName)}</p>
             </div>
         `;
+    } else if (contentType === 'zip') {
+        element.innerHTML = `
+            <div id="zip-list-${snippetId}" data-zip-url="${encodeURIComponent(fileUrl)}" style="margin-bottom: 15px; width: 100%;">
+                <div class="loading-text" style="font-size: 13px;">⏳ Reading contents...</div>
+            </div>
+            <p class="file-name">🗜️ ${escapeHtml(fileName)}</p>
+        `;
+        renderZipPreviews();
     }
 
     // Mark viewing complete after a short delay (let user see the content)
