@@ -1,7 +1,7 @@
 {
   "name": "justvue",
   "version": "2.0.0",
-  "description": "JustVue - snippet manager with Supabase storage",
+  "description": "JustVue - snippet and file (PDF/ZIP/Image) manager with Supabase storage",
   "main": "index.html",
   "scripts": {
     "start": "echo 'Open index.html in your browser'",
