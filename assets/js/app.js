@@ -338,6 +338,14 @@ function handleFileSelect(e) {
     const file = e.target.files[0];
     if (!file) return;
 
+    // Check file size limit (50MB = 50 * 1024 * 1024 bytes)
+    const MAX_FILE_SIZE = 50 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+        showAlert('⚠️ File size exceeds the 50MB limit. Please select a smaller file.');
+        clearFileSelection();
+        return;
+    }
+
     selectedFile = file;
 
     // Show preview

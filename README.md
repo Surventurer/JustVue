@@ -18,21 +18,21 @@
 # JustVue
 
 
-JustVue is a modern, secure snippet manager designed to store your code snippets, images, and PDF documents with ease. Built with performance and security in mind, it leverages Supabase for real-time synchronization and cloud storage, ensuring your data is accessible and up-to-date across all your devices.
+JustVue is a modern, secure snippet manager designed to store your code snippets, images, PDF documents and ZIP files with ease. Built with performance and security in mind, it leverages Supabase for real-time synchronization and cloud storage, ensuring your data is accessible and up-to-date across all your devices.
 
 ## Features
 
 - **📝 Multi-Format Support**  
   Store more than just code. JustVue supports:
   - Text & Code Snippets
-  - Images (Direct upload to Supabase Storage)
+  - Images
   - PDF Documents
-  - ZIP Archives
+  - ZIP Archives (Parses and renders an inline, scrollable preview of directory contents directly in the browser using JSZip)
 
 - **🔒 Security & Privacy**
   - **Password Protection**: Secure individual snippets with a password.
   - **Client-Side Encryption**: Content is encrypted in the browser using AES-256-GCM (WebCrypto API) before upload — your unencrypted data and password never leave the browser.
-  - **No Size Limits**: Encrypted files are uploaded directly to Supabase Storage as encrypted blobs, bypassing any server body-size restrictions.
+  - **Local File Constraints**: Implements a strict 50 MB client-side file upload limit to prevent browser memory issues during encryption and guarantee reliable Supabase uploads.
   - **Backward Compatible**: Supports decryption of older server-encrypted and legacy XOR-encrypted content.
   - **Hide Content**: Toggle visibility of sensitive snippets.
   - **Security Headers**: X-Frame-Options, X-Content-Type-Options, and Referrer-Policy for enhanced protection.
@@ -59,6 +59,7 @@ flowchart TD
         UI
         Logic["App Logic / State"]
         Crypto["🔐 WebCrypto AES-256-GCM"]
+        Zipping["🗜️ JSZip (ZIP Preview Parsing)"]
     end
     
     subgraph Backend ["Serverless Layer - Netlify"]
@@ -77,6 +78,7 @@ flowchart TD
     UI -->|Input| Logic
     
     Logic -->|Encrypt/Decrypt in Browser| Crypto
+    Logic -->|Read & Render contents| Zipping
     Logic -->|Upload Files plain and encrypted| Storage
     Logic -->|Save Text and Metadata| Save
     
