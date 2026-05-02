@@ -1329,8 +1329,10 @@ function renderCodeList() {
             } else {
                 contentHtml = `<div class="snippet-content">
                     <div class="pdf-container">
-                        <iframe src="${fileUrl}" width="100%" height="400px" style="border: none; border-radius: 8px;"></iframe>
-                        <p class="file-name">📄 ${escapeHtml(snippet.fileName || 'Document.pdf')}</p>
+                        <div class="pdf-pages" data-pdf-url="${encodeURIComponent(fileUrl)}" style="width: 100%; min-height: 200px; padding: 14px; background: #eef3f0; border-radius: 8px; overflow: auto; display: flex; flex-direction: column; gap: 14px;">
+                            <div class="loading-text" style="font-size: 13px; text-align: center;">⏳ Loading PDF...</div>
+                        </div>
+                        <p class="file-name" style="margin-top: 10px;">📄 ${escapeHtml(snippet.fileName || 'Document.pdf')}</p>
                     </div>
                 </div>`;
             }
@@ -1437,6 +1439,7 @@ function renderCodeList() {
     if (!isDialogOpen) {
         renderDecryptedPDFs();
         renderZipPreviews();
+        renderPendingPDFs();
     }
 }
 
@@ -1457,6 +1460,79 @@ async function autoLoadFiles() {
             loadFileUrl(snippetId);
         }
     }
+}
+
+// PDF.js logic for mobile-friendly rendering
+let pdfjsPromise;
+async function loadPdfJs() {
+    if (!pdfjsPromise) {
+        pdfjsPromise = import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.mjs").then((pdfjsLib) => {
+            pdfjsLib.GlobalWorkerOptions.workerSrc =
+                "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.mjs";
+            return pdfjsLib;
+        });
+    }
+    return pdfjsPromise;
+}
+
+async function renderPdfInContainer(pdfUrl, container) {
+    try {
+        const pdfjsLib = await loadPdfJs();
+        
+        let sourceUrl = pdfUrl;
+        // If it's a remote URL, fetch as blob first to avoid CORS issues with pdf.js internal fetch
+        if (pdfUrl.startsWith('http')) {
+            const response = await fetch(pdfUrl);
+            if (!response.ok) throw new Error("Failed to fetch PDF");
+            const blob = await response.blob();
+            sourceUrl = URL.createObjectURL(blob);
+        }
+
+        const pdf = await pdfjsLib.getDocument(sourceUrl).promise;
+        container.innerHTML = ''; // clear loading state
+        
+        const containerWidth = container.clientWidth > 0 ? container.clientWidth : Math.min(window.innerWidth - 40, 920);
+        const pageWidth = Math.max(280, Math.min(containerWidth - 32, 920));
+        
+        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+            const page = await pdf.getPage(pageNumber);
+            const baseViewport = page.getViewport({ scale: 1 });
+            const scale = Math.max(0.6, pageWidth / baseViewport.width);
+            const viewport = page.getViewport({ scale });
+            const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+            
+            const canvas = document.createElement("canvas");
+            const context = canvas.getContext("2d");
+            
+            canvas.style.display = "block";
+            canvas.style.margin = "0 auto";
+            canvas.style.borderRadius = "4px";
+            canvas.style.background = "#ffffff";
+            canvas.style.boxShadow = "0 4px 18px rgba(31, 45, 38, 0.14)";
+            
+            canvas.width = Math.floor(viewport.width * pixelRatio);
+            canvas.height = Math.floor(viewport.height * pixelRatio);
+            canvas.style.width = `${Math.floor(viewport.width)}px`;
+            canvas.style.maxWidth = "100%";
+            
+            context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+            container.append(canvas);
+            
+            await page.render({ canvasContext: context, viewport }).promise;
+        }
+    } catch (error) {
+        console.error('PDF Render Error:', error);
+        container.innerHTML = `<div style="color: #e74c3c; text-align: center; padding: 20px;">❌ Failed to render PDF.</div>`;
+    }
+}
+
+function renderPendingPDFs() {
+    const pdfContainers = document.querySelectorAll('.pdf-pages[data-pdf-url]');
+    pdfContainers.forEach(container => {
+        const url = decodeURIComponent(container.dataset.pdfUrl);
+        container.removeAttribute('data-pdf-url');
+        renderPdfInContainer(url, container);
+    });
 }
 
 // Render decrypted PDFs by converting data URLs to blob URLs
@@ -1482,9 +1558,11 @@ function renderDecryptedPDFs() {
             const fileNameEl = container.querySelector('.file-name');
             const fileName = fileNameEl ? fileNameEl.outerHTML : '';
 
-            // Replace container content with iframe using blob URL
+            // Replace container content with canvas rendering container using blob URL
             container.innerHTML = `
-                <iframe src="${blobUrl}" width="100%" height="400px" style="border: none; border-radius: 8px;"></iframe>
+                <div class="pdf-pages" data-pdf-url="${encodeURIComponent(blobUrl)}" style="width: 100%; min-height: 200px; padding: 14px; background: #eef3f0; border-radius: 8px; overflow: auto; display: flex; flex-direction: column; gap: 14px;">
+                    <div class="loading-text" style="font-size: 13px; text-align: center;">⏳ Loading PDF...</div>
+                </div>
                 ${fileName}
             `;
 
@@ -1627,10 +1705,13 @@ function updateSnippetPreview(snippetId, fileUrl) {
     } else if (contentType === 'pdf') {
         element.innerHTML = `
             <div class="pdf-container">
-                <iframe src="${fileUrl}" width="100%" height="400px" style="border: none; border-radius: 8px;"></iframe>
-                <p class="file-name">📄 ${escapeHtml(fileName)}</p>
+                <div class="pdf-pages" data-pdf-url="${encodeURIComponent(fileUrl)}" style="width: 100%; min-height: 200px; padding: 14px; background: #eef3f0; border-radius: 8px; overflow: auto; display: flex; flex-direction: column; gap: 14px;">
+                    <div class="loading-text" style="font-size: 13px; text-align: center;">⏳ Loading PDF...</div>
+                </div>
+                <p class="file-name" style="margin-top: 10px;">📄 ${escapeHtml(fileName)}</p>
             </div>
         `;
+        setTimeout(renderPendingPDFs, 100);
     } else if (contentType === 'zip') {
         element.innerHTML = `
             <div id="zip-list-${snippetId}" data-zip-url="${encodeURIComponent(fileUrl)}" style="margin-bottom: 15px; width: 100%;">
