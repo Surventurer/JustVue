@@ -1573,6 +1573,9 @@ function renderDecryptedPDFs() {
             container.innerHTML = `<div style="color: red;">❌ Failed to render PDF</div>`;
         }
     });
+
+    // Trigger pdf.js canvas rendering for the newly-created data-pdf-url containers
+    renderPendingPDFs();
 }
 
 function renderZipPreviews() {
