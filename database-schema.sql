@@ -82,3 +82,33 @@ CREATE INDEX IF NOT EXISTS idx_code_snippets_content_type ON code_snippets(conte
 -- WHERE content_type = 'text' OR content_type IS NULL;
 --
 -- =====================================================
+
+-- =====================================================
+-- Auto Delete Feature - Migration
+-- =====================================================
+-- Run this to add auto-delete support to existing table:
+
+ALTER TABLE code_snippets 
+  ADD COLUMN IF NOT EXISTS auto_delete_at TIMESTAMPTZ DEFAULT NULL;
+
+-- Index for efficient expired snippet lookups
+CREATE INDEX IF NOT EXISTS idx_code_snippets_auto_delete 
+  ON code_snippets(auto_delete_at) 
+  WHERE auto_delete_at IS NOT NULL;
+
+-- =====================================================
+-- Netlify Scheduled Function (Auto-Delete)
+-- =====================================================
+-- To enable automatic cleanup of expired snippets,
+-- add this to your netlify.toml:
+--
+-- [functions."auto-delete"]
+--   schedule = "@daily"
+--
+-- This will run the auto-delete function once per day
+-- to remove snippets past their auto_delete_at date.
+--
+-- You can also trigger it manually:
+-- GET /.netlify/functions/auto-delete
+-- =====================================================
+

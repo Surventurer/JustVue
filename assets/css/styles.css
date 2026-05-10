@@ -1633,3 +1633,87 @@ h1 {
         background: #d8d8d8;
     }
 }
+
+
+/* ===== Toggle Row (Hide + Auto Delete side by side on desktop) ===== */
+.toggle-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    gap: 30px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.toggle-row .hide-content-section,
+.toggle-row .auto-delete-section {
+    margin-bottom: 0;
+}
+
+/* Stack on small screens */
+@media (max-width: 599px) {
+    .toggle-row {
+        flex-direction: column;
+        gap: 12px;
+        margin-bottom: 15px;
+    }
+}
+
+/* ===== Auto Delete Feature ===== */
+.auto-delete-section {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.auto-delete-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.auto-delete-badge.active {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+    color: white;
+}
+
+.auto-delete-badge.expiring-soon {
+    background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+    color: white;
+    animation: pulse-badge 2s ease-in-out infinite;
+}
+
+@keyframes pulse-badge {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Responsive: Small phones */
+@media (max-width: 479px) {
+    .auto-delete-section {
+        margin-bottom: 15px;
+    }
+
+    .auto-delete-badge {
+        font-size: 10px;
+        padding: 3px 8px;
+    }
+}
+
+/* Dark mode auto-delete */
+@media (prefers-color-scheme: dark) {
+    .auto-delete-badge.active {
+        background: linear-gradient(135deg, #c0392b 0%, #a93226 100%);
+    }
+
+    .auto-delete-badge.expiring-soon {
+        background: linear-gradient(135deg, #e67e22 0%, #d35400 100%);
+    }
+}

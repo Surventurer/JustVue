@@ -34,3 +34,8 @@
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Scheduled function for auto-deleting expired snippets
+[functions."auto-delete"]
+  schedule = "@daily"
+

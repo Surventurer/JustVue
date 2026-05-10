@@ -66,7 +66,7 @@ async function getSnippetsPaginated(limit, offset, lightweight = false) {
   
   // Select columns based on lightweight mode
   const columns = lightweight
-    ? 'id, title, password, timestamp, hidden, is_encrypted, content_type, file_name, file_type, storage_path'
+    ? 'id, title, password, timestamp, hidden, is_encrypted, content_type, file_name, file_type, storage_path, auto_delete_at'
     : '*';
   
   const { data, error } = await supabase
@@ -110,7 +110,8 @@ async function saveSnippet(snippet) {
     content_type: snippet.contentType || 'text',
     file_name: snippet.fileName || null,
     file_type: snippet.fileType || null,
-    storage_path: snippet.storagePath || null
+    storage_path: snippet.storagePath || null,
+    auto_delete_at: snippet.autoDeleteAt || null
   };
   
   const { data, error } = await supabase
@@ -183,7 +184,8 @@ async function saveAllSnippets(snippets) {
       content_type: 'text',
       file_name: null,
       file_type: null,
-      storage_path: null
+      storage_path: null,
+      auto_delete_at: snippet.autoDeleteAt || null
     }));
     
     const { error: insertError } = await supabase
@@ -309,7 +311,8 @@ function mapRowToSnippet(row, lightweight = false) {
     contentType: row.content_type || 'text',
     fileName: row.file_name,
     fileType: row.file_type,
-    storagePath: row.storage_path
+    storagePath: row.storage_path,
+    autoDeleteAt: row.auto_delete_at || null
   };
   
   // Include content for text snippets (not lightweight mode)

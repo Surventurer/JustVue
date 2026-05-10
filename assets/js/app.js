@@ -313,6 +313,7 @@ const fileSelectBtn = document.getElementById('fileSelectBtn');
 const addBtn = document.getElementById('addBtn');
 const codeList = document.getElementById('codeList');
 const hideContentToggle = document.getElementById('hideContentToggle');
+const autoDeleteToggle = document.getElementById('autoDeleteToggle');
 
 // Content type management
 let selectedFile = null;
@@ -455,6 +456,8 @@ codeInput.addEventListener('keydown', (e) => {
 async function addCode() {
     const password = passwordInput.value.trim();
     const title = titleInput.value.trim();
+    const autoDelete = autoDeleteToggle.checked;
+    const autoDeleteAt = autoDelete ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() : null;
     const hideContent = hideContentToggle.checked;
 
     if (password === '') {
@@ -509,9 +512,10 @@ async function addCode() {
                     fileName: selectedFile.name,
                     fileType: selectedFile.type,
                     password: password,
-                    timestamp: new Date().toLocaleString(),
+                    timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
                     hidden: false,
-                    isEncrypted: false
+                    isEncrypted: false,
+                    autoDeleteAt: autoDeleteAt
                 };
 
                 // Send only metadata to Netlify function
@@ -596,9 +600,10 @@ async function addCode() {
                     fileName: selectedFile.name,
                     fileType: selectedFile.type,
                     password: password,
-                    timestamp: new Date().toLocaleString(),
+                    timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
                     hidden: true,
-                    isEncrypted: true
+                    isEncrypted: true,
+                    autoDeleteAt: autoDeleteAt
                 };
 
                 const response = await fetch('/.netlify/functions/save-data', {
@@ -653,9 +658,10 @@ async function addCode() {
         fileName: selectedFile ? selectedFile.name : null,
         fileType: selectedFile ? selectedFile.type : null,
         password: password,
-        timestamp: new Date().toLocaleString(),
+        timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
         hidden: hideContent,
-        isEncrypted: hideContent
+        isEncrypted: hideContent,
+        autoDeleteAt: autoDeleteAt
     };
 
     // Save to database (text snippets only reach here; files handled above)
@@ -702,6 +708,7 @@ function resetForm() {
     titleInput.value = '';
     codeInput.value = '';
     hideContentToggle.checked = false;
+    autoDeleteToggle.checked = false;
     clearFileSelection();
     document.querySelector('input[name="contentType"][value="text"]').checked = true;
     selectedContentType = 'text';
@@ -1409,10 +1416,22 @@ function renderCodeList() {
             </button>`;
         }
 
+        // Auto-delete badge
+        let autoDeleteBadge = '';
+        if (snippet.autoDeleteAt) {
+            const daysLeft = getAutoDeleteDaysLeft(snippet.autoDeleteAt);
+            if (daysLeft !== null) {
+                const badgeClass = daysLeft <= 3 ? 'auto-delete-badge expiring-soon' : 'auto-delete-badge active';
+                const label = daysLeft <= 0 ? '⏳ Expiring soon' : `🗓️ ${daysLeft}d left`;
+                autoDeleteBadge = `<span class="${badgeClass}">${label}</span>`;
+            }
+        }
+
         return `
             <div class="code-item" data-snippet-id="${snippet.id}">
                 <div class="snippet-header">
                     <div class="code-title">${highlightedTitle}</div>
+                    ${autoDeleteBadge}
                     ${typeBadge}
                 </div>
                 <div class="timestamp">Added: ${snippet.timestamp}</div>
@@ -1760,6 +1779,17 @@ function escapeHtml(text) {
 }
 
 // Escape for JavaScript string
+// Calculate remaining days until auto-delete
+function getAutoDeleteDaysLeft(autoDeleteAt) {
+    if (!autoDeleteAt) return null;
+    const deleteDate = new Date(autoDeleteAt);
+    if (isNaN(deleteDate.getTime())) return null;
+    const now = new Date();
+    const diffMs = deleteDate - now;
+    if (diffMs <= 0) return 0;
+    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+}
+
 function escapeForJS(text) {
     return text.replace(/`/g, '\\`').replace(/\$/g, '\\$');
 }
