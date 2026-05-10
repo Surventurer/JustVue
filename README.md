@@ -37,6 +37,15 @@ JustVue is a modern, secure snippet manager designed to store your code snippets
   - **Hide Content**: Toggle visibility of sensitive snippets.
   - **Security Headers**: X-Frame-Options, X-Content-Type-Options, and Referrer-Policy for enhanced protection.
 
+- **🗓️ Auto Delete**
+  - Set snippets to **automatically delete after 30 days**.
+  - Works with all content types: Text, Image, PDF, ZIP — both plain and encrypted.
+  - Visual countdown badge shows remaining days on each snippet.
+  - A scheduled Netlify function runs daily to clean up expired snippets.
+
+- **🕐 IST Timestamps**
+  - All snippet timestamps use **Indian Standard Time (Asia/Kolkata)** for consistency.
+
 - **☁️ Cloud Sync & Real-Time Updates**
   - Powered by **Supabase**.
   - **Live Sync**: Changes defined on one device appear instantly on others.
@@ -67,6 +76,7 @@ flowchart TD
         ServerCrypto["🔐 crypto (legacy fallback)"]
         Save["💾 save-data"]
         Get["🔍 get-data"]
+        AutoDel["🗓️ auto-delete (scheduled)"]
     end
     
     subgraph Database ["Supabase Services"]
@@ -86,6 +96,8 @@ flowchart TD
     
     Save -->|Persist| DB
     Get -->|Query| DB
+    AutoDel -->|Delete Expired| DB
+    AutoDel -->|Remove Files| Storage
     
     Logic -->|Load Data| Get
     Get -.->|JSON| Logic
@@ -115,8 +127,9 @@ cd JustVue
 ### 2. Supabase Configuration
 
 1.  Go to your Supabase project dashboard.
-2.  **Database**: opens the SQL Editor and run the script found in `database-schema.sql` to create the necessary tables and indexes.
-3.  **Storage**: Create a new storage bucket named `code-files`.
+2.  **Database**: Open the SQL Editor and run the script found in `database-schema.sql` to create the necessary tables and indexes.
+3.  **Auto Delete Migration**: If upgrading an existing installation, run the migration at the bottom of `database-schema.sql` to add the `auto_delete_at` column.
+4.  **Storage**: Create a new storage bucket named `code-files`.
     *   Set it to **Public** if you want direct URL access.
     *   Or keep it **Private** (recommended) for use with signed URLs.
 
@@ -159,7 +172,8 @@ This will start a local server (usually at `http://localhost:8888`) that mimics 
     *   Enter a **Title** and **Password**.
     *   Select Type: Text, Image, PDF, or ZIP.
     *   Paste your code/text or select a file.
-    *   (Optional) Check "Hide This Content" to encrypt it.
+    *   (Optional) Toggle **"Hide This Content"** to encrypt it.
+    *   (Optional) Toggle **"Auto Delete in 30 Days"** to schedule automatic deletion.
     *   Click **Add Snippet**.
 
 2.  **View & Decrypt**:
@@ -167,6 +181,11 @@ This will start a local server (usually at `http://localhost:8888`) that mimics 
     *   Click "Copy" or "Download" and enter the password when prompted.
 
 3.  **Search**: Use the search bar to filter snippets by title.
+
+4.  **Auto Delete**:
+    *   Snippets with auto-delete show a countdown badge (e.g. "🗓️ 28d left").
+    *   When the badge turns orange ("⏳ Expiring soon"), the snippet is about to be removed.
+    *   Expired snippets are cleaned up daily by the scheduled `auto-delete` function.
 
 ## Contact
 
