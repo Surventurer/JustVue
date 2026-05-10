@@ -43,8 +43,8 @@ JustVue is a modern, secure snippet manager designed to store your code snippets
   - Visual countdown badge shows remaining days on each snippet.
   - A scheduled Netlify function runs daily to clean up expired snippets.
 
-- **🕐 IST Timestamps**
-  - All snippet timestamps use **Indian Standard Time (Asia/Kolkata)** for consistency.
+- **🕐 UTC Timestamps**
+  - All snippet timestamps use **UTC** for consistency across timezones.
 
 - **☁️ Cloud Sync & Real-Time Updates**
   - Powered by **Supabase**.

@@ -512,7 +512,7 @@ async function addCode() {
                     fileName: selectedFile.name,
                     fileType: selectedFile.type,
                     password: password,
-                    timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+                    timestamp: new Date().toLocaleString('en-IN', { timeZone: 'UTC' }),
                     hidden: false,
                     isEncrypted: false,
                     autoDeleteAt: autoDeleteAt
@@ -600,7 +600,7 @@ async function addCode() {
                     fileName: selectedFile.name,
                     fileType: selectedFile.type,
                     password: password,
-                    timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+                    timestamp: new Date().toLocaleString('en-IN', { timeZone: 'UTC' }),
                     hidden: true,
                     isEncrypted: true,
                     autoDeleteAt: autoDeleteAt
@@ -658,7 +658,7 @@ async function addCode() {
         fileName: selectedFile ? selectedFile.name : null,
         fileType: selectedFile ? selectedFile.type : null,
         password: password,
-        timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+        timestamp: new Date().toLocaleString('en-IN', { timeZone: 'UTC' }),
         hidden: hideContent,
         isEncrypted: hideContent,
         autoDeleteAt: autoDeleteAt
